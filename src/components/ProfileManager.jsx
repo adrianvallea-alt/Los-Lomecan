@@ -7,8 +7,120 @@ import { COLORS } from '../utils/colors';
 const AVATARS = ['🏋️', '🏃', '🧘', '💪', '🏊', '🚴', '🤸', '🏌️', '⛹️', '🤾', '🏄', '🧗', '🤼', '🏋️‍♀️', '🤹', '🏃‍♀️', '🚣', '🧗‍♂️', '🎯', '🔥'];
 
 export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) {
-  // ... TODA LA LÓGICA DE ESTADOS, HANDLERS Y VALIDACIONES PERMANECE EXACTAMENTE IGUAL ...
-  // (No se repite aquí por brevedad, pero se asume que está copiada sin cambios)
+  const [editingProfileId, setEditingProfileId] = useState(null);
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+
+  const [form, setForm] = useState({
+    id: '',
+    name: '',
+    role: 'Athlete',
+    color: COLORS[0]?.name || '',
+    goals: { cal: 2000, pro: 100, carb: 200, fat: 50 },
+    pin: '',
+    avatar: null,
+  });
+
+  const filteredProfiles = profiles.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.id.toLowerCase().includes(search.toLowerCase()) ||
+    (p.role && p.role.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const resetForm = () => {
+    setForm({
+      id: '',
+      name: '',
+      role: 'Athlete',
+      color: COLORS[0]?.name || '',
+      goals: { cal: 2000, pro: 100, carb: 200, fat: 50 },
+      pin: '',
+      avatar: null,
+    });
+    setEditingProfileId(null);
+  };
+
+  const handleEdit = (profile) => {
+    setEditingProfileId(profile.id);
+    setForm({
+      id: profile.id,
+      name: profile.name,
+      role: profile.role || 'Athlete',
+      color: COLORS.some(c => c.name === profile.color) ? profile.color : COLORS[0]?.name || '',
+      goals: profile.goals || { cal: 2000, pro: 100, carb: 200, fat: 50 },
+      pin: profile.pin || '',
+      avatar: profile.avatar || null,
+    });
+  };
+
+  const handleNew = () => {
+    resetForm();
+    toast('Ingresa los datos del nuevo perfil', { icon: '✨' });
+  };
+
+  const validateForm = () => {
+    if (!form.id.trim()) {
+      toast.error('El ID es obligatorio');
+      return false;
+    }
+    if (!form.name.trim()) {
+      toast.error('El nombre es obligatorio');
+      return false;
+    }
+    if (!editingProfileId && profiles.some(p => p.id === form.id)) {
+      toast.error('Ya existe un perfil con ese ID');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
+
+    setSaving(true);
+    const updatedProfile = { ...form };
+
+    let updatedProfiles;
+    if (editingProfileId) {
+      updatedProfiles = profiles.map(p => p.id === editingProfileId ? updatedProfile : p);
+    } else {
+      updatedProfiles = [...profiles, updatedProfile];
+    }
+
+    try {
+      await updateProfile(updatedProfile);
+      onUpdateProfiles(updatedProfiles);
+      toast.success(editingProfileId ? 'Perfil actualizado' : 'Perfil creado');
+      resetForm();
+    } catch (e) {
+      console.error('Error al guardar perfil:', e);
+      toast.error('Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (profileId) => {
+    if (profileId === 'adrian') {
+      toast.error('No se puede eliminar al administrador');
+      return;
+    }
+    setDeleting(profileId);
+    try {
+      await deleteProfile(profileId);
+      const updatedProfiles = profiles.filter(p => p.id !== profileId);
+      onUpdateProfiles(updatedProfiles);
+      toast.success('Perfil eliminado');
+      setShowDeleteConfirm(null);
+    } catch (e) {
+      console.error('Error al eliminar:', e);
+      toast.error('Error al eliminar');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#09090B]/90 backdrop-blur-xl flex items-center justify-center p-4 animate-fade-in">
@@ -161,22 +273,36 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
 
               {/* Color */}
               <div>
-                <label className="text-[11px] text-zinc-500 ml-1 mb-2 block">Color</label>
+                <label className="text-[11px] text-zinc-500 ml-1 mb-2 block">Color de fondo</label>
                 <div className="flex gap-2 flex-wrap">
-                  {COLORS.map(c => (
-                    <button
-                      key={c.name}
-                      type="button"
-                      onClick={() => setForm({ ...form, color: c.name })}
-                      className={`w-9 h-9 rounded-full transition-all active:scale-90 flex items-center justify-center ${
-                        form.color === c.name ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: c.hex }}
-                      aria-label={c.label}
-                    >
-                      {form.color === c.name && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}
-                    </button>
-                  ))}
+                  {/*
+                    Se reemplaza el .map() por botones individuales con key explícita
+                    para eliminar cualquier posibilidad de warning.
+                  */}
+                  <button key="silver" type="button" onClick={() => setForm({ ...form, color: 'silver' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'silver' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#A1A1AA' }} aria-label="Plata">{form.color === 'silver' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="red" type="button" onClick={() => setForm({ ...form, color: 'red' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'red' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#EF4444' }} aria-label="Rojo">{form.color === 'red' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="orange" type="button" onClick={() => setForm({ ...form, color: 'orange' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'orange' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#F97316' }} aria-label="Naranja">{form.color === 'orange' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="amber" type="button" onClick={() => setForm({ ...form, color: 'amber' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'amber' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#F59E0B' }} aria-label="Ámbar">{form.color === 'amber' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="yellow" type="button" onClick={() => setForm({ ...form, color: 'yellow' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'yellow' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#EAB308' }} aria-label="Amarillo">{form.color === 'yellow' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="lime" type="button" onClick={() => setForm({ ...form, color: 'lime' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'lime' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#84CC16' }} aria-label="Lima">{form.color === 'lime' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="green" type="button" onClick={() => setForm({ ...form, color: 'green' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'green' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#22C55E' }} aria-label="Verde">{form.color === 'green' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="emerald" type="button" onClick={() => setForm({ ...form, color: 'emerald' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'emerald' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#10B981' }} aria-label="Esmeralda">{form.color === 'emerald' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="teal" type="button" onClick={() => setForm({ ...form, color: 'teal' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'teal' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#14B8A6' }} aria-label="Turquesa">{form.color === 'teal' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="cyan" type="button" onClick={() => setForm({ ...form, color: 'cyan' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'cyan' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#06B6D4' }} aria-label="Cian">{form.color === 'cyan' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="sky" type="button" onClick={() => setForm({ ...form, color: 'sky' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'sky' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#0EA5E9' }} aria-label="Cielo">{form.color === 'sky' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="blue" type="button" onClick={() => setForm({ ...form, color: 'blue' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'blue' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#3B82F6' }} aria-label="Azul">{form.color === 'blue' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="indigo" type="button" onClick={() => setForm({ ...form, color: 'indigo' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'indigo' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#6366F1' }} aria-label="Índigo">{form.color === 'indigo' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="violet" type="button" onClick={() => setForm({ ...form, color: 'violet' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'violet' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#8B5CF6' }} aria-label="Violeta">{form.color === 'violet' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="purple" type="button" onClick={() => setForm({ ...form, color: 'purple' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'purple' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#A855F7' }} aria-label="Púrpura">{form.color === 'purple' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="fuchsia" type="button" onClick={() => setForm({ ...form, color: 'fuchsia' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'fuchsia' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#D946EF' }} aria-label="Fucsia">{form.color === 'fuchsia' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="pink" type="button" onClick={() => setForm({ ...form, color: 'pink' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'pink' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#EC4899' }} aria-label="Rosa">{form.color === 'pink' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="rose" type="button" onClick={() => setForm({ ...form, color: 'rose' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'rose' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#F43F5E' }} aria-label="Rosado">{form.color === 'rose' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="pastelPink" type="button" onClick={() => setForm({ ...form, color: 'pastelPink' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'pastelPink' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#FFD1DC' }} aria-label="Pastel Rosa">{form.color === 'pastelPink' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="mint" type="button" onClick={() => setForm({ ...form, color: 'mint' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'mint' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#C1E1C1' }} aria-label="Menta">{form.color === 'mint' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="babyBlue" type="button" onClick={() => setForm({ ...form, color: 'babyBlue' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'babyBlue' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#CFE2F3' }} aria-label="Bebé Azul">{form.color === 'babyBlue' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="peach" type="button" onClick={() => setForm({ ...form, color: 'peach' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'peach' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#FDE2E4' }} aria-label="Melocotón">{form.color === 'peach' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="lavender" type="button" onClick={() => setForm({ ...form, color: 'lavender' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'lavender' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#E6E6FA' }} aria-label="Lavanda">{form.color === 'lavender' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
+                  <button key="cream" type="button" onClick={() => setForm({ ...form, color: 'cream' })} className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 ${form.color === 'cream' ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0F0F11] scale-110' : 'hover:scale-105'}`} style={{ backgroundColor: '#FFFACD' }} aria-label="Crema">{form.color === 'cream' && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}</button>
                 </div>
               </div>
 
@@ -184,20 +310,29 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
               <div>
                 <label className="text-[11px] text-zinc-500 ml-1 mb-2 block">Avatar</label>
                 <div className="flex flex-wrap gap-1.5">
-                  {AVATARS.map(emoji => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setForm({ ...form, avatar: form.avatar === emoji ? null : emoji })}
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${
-                        form.avatar === emoji
-                          ? 'bg-white/10 ring-1 ring-white/30'
-                          : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'
-                      }`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+                  {/*
+                    Se reemplaza el .map() de avatares por botones individuales con key.
+                  */}
+                  <button key="🏋️" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏋️' ? null : '🏋️' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏋️' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏋️</button>
+                  <button key="🏃" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏃' ? null : '🏃' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏃' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏃</button>
+                  <button key="🧘" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🧘' ? null : '🧘' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🧘' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🧘</button>
+                  <button key="💪" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '💪' ? null : '💪' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '💪' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>💪</button>
+                  <button key="🏊" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏊' ? null : '🏊' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏊' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏊</button>
+                  <button key="🚴" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🚴' ? null : '🚴' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🚴' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🚴</button>
+                  <button key="🤸" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🤸' ? null : '🤸' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🤸' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🤸</button>
+                  <button key="🏌️" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏌️' ? null : '🏌️' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏌️' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏌️</button>
+                  <button key="⛹️" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '⛹️' ? null : '⛹️' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '⛹️' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>⛹️</button>
+                  <button key="🤾" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🤾' ? null : '🤾' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🤾' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🤾</button>
+                  <button key="🏄" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏄' ? null : '🏄' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏄' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏄</button>
+                  <button key="🧗" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🧗' ? null : '🧗' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🧗' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🧗</button>
+                  <button key="🤼" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🤼' ? null : '🤼' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🤼' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🤼</button>
+                  <button key="🏋️‍♀️" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏋️‍♀️' ? null : '🏋️‍♀️' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏋️‍♀️' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏋️‍♀️</button>
+                  <button key="🤹" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🤹' ? null : '🤹' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🤹' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🤹</button>
+                  <button key="🏃‍♀️" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🏃‍♀️' ? null : '🏃‍♀️' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🏃‍♀️' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🏃‍♀️</button>
+                  <button key="🚣" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🚣' ? null : '🚣' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🚣' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🚣</button>
+                  <button key="🧗‍♂️" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🧗‍♂️' ? null : '🧗‍♂️' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🧗‍♂️' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🧗‍♂️</button>
+                  <button key="🎯" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🎯' ? null : '🎯' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🎯' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🎯</button>
+                  <button key="🔥" type="button" onClick={() => setForm({ ...form, avatar: form.avatar === '🔥' ? null : '🔥' })} className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all active:scale-90 ${form.avatar === '🔥' ? 'bg-white/10 ring-1 ring-white/30' : 'bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.05]'}`}>🔥</button>
                 </div>
               </div>
 
@@ -218,20 +353,42 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
               <div>
                 <label className="text-[11px] text-zinc-500 ml-1 mb-2 block">Macros objetivo</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {['cal', 'pro', 'carb', 'fat'].map((key, idx) => {
-                    const labels = ['Calorías', 'Proteínas (g)', 'Carbohidratos (g)', 'Grasas (g)'];
-                    return (
-                      <div key={key}>
-                        <label className="text-[10px] text-zinc-600">{labels[idx]}</label>
-                        <input
-                          type="number"
-                          value={form.goals[key]}
-                          onChange={e => setForm({ ...form, goals: { ...form.goals, [key]: parseInt(e.target.value) || 0 } })}
-                          className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white mt-1 focus:border-[#D4FF00]/40 transition-colors outline-none"
-                        />
-                      </div>
-                    );
-                  })}
+                  <div key="cal">
+                    <label className="text-[10px] text-zinc-600">Calorías</label>
+                    <input
+                      type="number"
+                      value={form.goals.cal}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, cal: parseInt(e.target.value) || 0 } })}
+                      className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white mt-1 focus:border-[#D4FF00]/40 transition-colors outline-none"
+                    />
+                  </div>
+                  <div key="pro">
+                    <label className="text-[10px] text-zinc-600">Proteínas (g)</label>
+                    <input
+                      type="number"
+                      value={form.goals.pro}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, pro: parseInt(e.target.value) || 0 } })}
+                      className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white mt-1 focus:border-[#D4FF00]/40 transition-colors outline-none"
+                    />
+                  </div>
+                  <div key="carb">
+                    <label className="text-[10px] text-zinc-600">Carbohidratos (g)</label>
+                    <input
+                      type="number"
+                      value={form.goals.carb}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, carb: parseInt(e.target.value) || 0 } })}
+                      className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white mt-1 focus:border-[#D4FF00]/40 transition-colors outline-none"
+                    />
+                  </div>
+                  <div key="fat">
+                    <label className="text-[10px] text-zinc-600">Grasas (g)</label>
+                    <input
+                      type="number"
+                      value={form.goals.fat}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, fat: parseInt(e.target.value) || 0 } })}
+                      className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white mt-1 focus:border-[#D4FF00]/40 transition-colors outline-none"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -264,7 +421,7 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
         )}
       </div>
 
-      {/* Confirmación de eliminación ahora integrada como overlay del mismo modal */}
+      {/* Confirmación de eliminación */}
       {showDeleteConfirm && (
         <div className="absolute inset-0 bg-[#09090B]/80 backdrop-blur-sm flex items-center justify-center p-4 z-[120]">
           <div className="bg-[#0F0F11] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full shadow-2xl">

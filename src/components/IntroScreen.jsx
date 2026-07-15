@@ -71,7 +71,7 @@ export default function IntroScreen({ onFinish }) {
           />
           {!logoError ? (
             <img
-              src="/logo.png"
+              src="/Los-Lomecan/logo.png"
               alt="Logo"
               className="w-40 h-40 mx-auto relative z-10 object-contain"
               style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.5))' }}

@@ -1,13 +1,27 @@
 // public/service-worker.js
 const CACHE_NAME = 'lomecan-v1';
-const urlsToPrecache = ['/favicon.svg'];
+
+// Precargamos los archivos esenciales de entrada para garantizar el funcionamiento offline
+const urlsToPrecache = [
+  './',
+  './index.html',
+  './manifest.json',
+  './favicon-16x16.png'
+];
 
 // Instalación: precarga recursos estáticos
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('Service Worker: precargando recursos estáticos');
-      return cache.addAll(urlsToPrecache);
+      console.log('Service Worker: precargando recursos estáticos esenciales');
+      // Usamos un mapeo para evitar que un fallo en un archivo rompa toda la instalación
+      return Promise.all(
+        urlsToPrecache.map(url => {
+          return cache.add(url).catch(err => {
+            console.warn(`No se pudo precargar el recurso: ${url}`, err);
+          });
+        })
+      );
     })
   );
   self.skipWaiting(); // Activar inmediatamente
@@ -17,9 +31,13 @@ self.addEventListener('install', event => {
 self.addEventListener('fetch', event => {
   if (event.request.url.startsWith('chrome-extension://')) return;
 
+  // Si es una petición de navegación (el usuario recarga o entra a una ruta)
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/index.html'))
+      fetch(event.request).catch(() => {
+        // Corregido a ruta relativa para que funcione en subcarpetas de GitHub Pages
+        return caches.match('./index.html') || caches.match('./');
+      })
     );
     return;
   }
@@ -27,7 +45,14 @@ self.addEventListener('fetch', event => {
   // Para otros recursos, intentar red primero, luego caché
   event.respondWith(
     fetch(event.request).then(response => {
-      if (response.ok && (event.request.url.endsWith('.css') || event.request.url.endsWith('.js') || event.request.url.endsWith('.svg'))) {
+      // Si la respuesta es exitosa, guardamos una copia en caché de archivos estáticos clave
+      if (response.ok && (
+        event.request.url.endsWith('.css') || 
+        event.request.url.endsWith('.js') || 
+        event.request.url.endsWith('.svg') ||
+        event.request.url.endsWith('.png') || // Añadidos para guardar tus iconos y assets
+        event.request.url.includes('/icons/')
+      )) {
         const responseClone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
       }
@@ -44,6 +69,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (!cacheWhitelist.includes(cacheName)) {
+            console.log('Eliminando caché antigua:', cacheName);
             return caches.delete(cacheName);
           }
         })
