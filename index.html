@@ -23,16 +23,24 @@
     <meta property="og:description" content="Fitness y nutrición de élite en tu bolsillo." />
     <meta property="og:type" content="website" />
     
-    <!-- Pre-conexión a Supabase -->
+    <!-- Pre-conexión a Supabase (Cambia TU_PROYECTO por tu subdominio real) -->
     <link rel="dns-prefetch" href="https://[TU_PROYECTO].supabase.co" />
     
-    <!-- Registrar Service Worker -->
+    <!-- Registrar Service Worker y CAPTURAR el evento de instalación al instante -->
     <script>
+      // 1. Capturar el evento de instalación antes de que cargue React para evitar carreras de tiempo
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        // Avisar a React por si el componente ya se montó
+        window.dispatchEvent(new CustomEvent('lomecan-prompt-ready'));
+      });
+
+      // 2. Registro del Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Cambiado a ruta relativa './' para que funcione en Local y GitHub Pages
           navigator.serviceWorker.register('./service-worker.js')
-            .then(reg => console.log('Service Worker registrado:', reg.scope))
+            .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
             .catch(err => console.error('Error al registrar SW:', err));
         });
       }
@@ -40,7 +48,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Vite maneja esta ruta absoluta automáticamente durante el build, la dejamos así -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
