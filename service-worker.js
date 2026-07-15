@@ -1,6 +1,6 @@
 // public/service-worker.js
 const CACHE_NAME = 'lomecan-v1';
-const urlsToPrecache = ['/favicon.svg'];
+const urlsToPrecache = ['/Los-Lomecan/favicon.svg'];
 
 // Instalación: precarga recursos estáticos
 self.addEventListener('install', event => {

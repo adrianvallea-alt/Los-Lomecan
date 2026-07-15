@@ -28,15 +28,15 @@
     
     <!-- Registrar Service Worker -->
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => console.log('Service Worker registrado:', reg.scope))
-            .catch(err => console.error('Error al registrar SW:', err));
-        });
-      }
-    </script>
-    <script type="module" crossorigin src="/Los-Lomecan/assets/index-9hpgUJ3H.js"></script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/Los-Lomecan/service-worker.js')
+        .then(reg => console.log('Service Worker registrado:', reg.scope))
+        .catch(err => console.error('Error al registrar SW:', err));
+    });
+  }
+</script>
+    <script type="module" crossorigin src="/Los-Lomecan/assets/index-BHFPCl1h.js"></script>
     <link rel="stylesheet" crossorigin href="/Los-Lomecan/assets/index-BGoleaN7.css">
   </head>
   <body>
