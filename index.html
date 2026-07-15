@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon-16x16.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <title>Los Lomecan · Tu ecosistema de salud</title>
+    
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#09090B" />
+    <meta name="description" content="Tu compañero de fitness y nutrición de élite. Registra entrenamientos, macros y evolución." />
+    
+    <!-- iOS & Android PWA -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lomecan" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Lomecan · The Performance Club" />
+    <meta property="og:description" content="Fitness y nutrición de élite en tu bolsillo." />
+    <meta property="og:type" content="website" />
+    
+    <!-- Pre-conexión a Supabase -->
+    <link rel="dns-prefetch" href="https://[TU_PROYECTO].supabase.co" />
+    
+    <!-- Registrar Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(reg => console.log('Service Worker registrado:', reg.scope))
+            .catch(err => console.error('Error al registrar SW:', err));
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

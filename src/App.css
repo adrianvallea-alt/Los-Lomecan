@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #09090B;
+    color: #FFFFFF;
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-image: radial-gradient(circle at 50% 0%, #D4FF0008 0%, #09090B 70%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Safe areas para PWA */
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-left { padding-left: env(safe-area-inset-left, 0px); }
+.safe-right { padding-right: env(safe-area-inset-right, 0px); }
+
+/* Ocultar scrollbars */
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==========================================================================
+   ANIMACIONES
+   ========================================================================== */
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.92); opacity: 0; }
+  70% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes cyber-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(212, 255, 0, 0.15)); }
+  50% { filter: drop-shadow(0 0 16px rgba(212, 255, 0, 0.45)); }
+}
+
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes arm-swing {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@keyframes arm-drop {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(10deg); }
+}
+
+@keyframes arm-float {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-3deg); }
+}
+
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Clases de animación */
+.animate-shake {
+  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+.animate-pop-in {
+  animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-cyber-glow {
+  animation: cyber-glow 2.5s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float-gentle 4s ease-in-out infinite;
+}
+
+.animate-arm-swing {
+  animation: arm-swing 1.2s ease-in-out infinite;
+}
+
+.animate-arm-drop {
+  animation: arm-drop 0.8s ease-in-out infinite;
+}
+
+.animate-arm-float {
+  animation: arm-float 2s ease-in-out infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out forwards;
+}
+
+/* Easing premium adicional */
+.ease-out-expo {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
