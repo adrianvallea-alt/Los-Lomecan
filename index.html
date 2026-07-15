@@ -26,8 +26,17 @@
     <!-- Pre-conexión a Supabase (Cambia TU_PROYECTO por tu subdominio real) -->
     <link rel="dns-prefetch" href="https://[TU_PROYECTO].supabase.co" />
     
-    <!-- Registrar Service Worker -->
+    <!-- Registrar Service Worker y CAPTURAR el evento de instalación al instante -->
     <script>
+      // 1. Capturar el evento de instalación antes de que cargue React para evitar carreras de tiempo
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        // Avisar a React por si el componente ya se montó
+        window.dispatchEvent(new CustomEvent('lomecan-prompt-ready'));
+      });
+
+      // 2. Registro del Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./service-worker.js')
@@ -36,7 +45,7 @@
         });
       }
     </script>
-    <script type="module" crossorigin src="/Los-Lomecan/assets/index-PttIpeAF.js"></script>
+    <script type="module" crossorigin src="/Los-Lomecan/assets/index-2PkhFEyP.js"></script>
     <link rel="stylesheet" crossorigin href="/Los-Lomecan/assets/index-C2pyacXB.css">
   </head>
   <body>
