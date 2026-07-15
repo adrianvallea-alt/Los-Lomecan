@@ -1,7 +1,5 @@
-// public/service-worker.js
 const CACHE_NAME = 'lomecan-v1';
 
-// Precargamos los archivos esenciales de entrada para garantizar el funcionamiento offline
 const urlsToPrecache = [
   './',
   './index.html',
@@ -9,12 +7,11 @@ const urlsToPrecache = [
   './favicon-16x16.png'
 ];
 
-// Instalación: precarga recursos estáticos
+// Instalación: precarga recursos estáticos esenciales
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('Service Worker: precargando recursos estáticos esenciales');
-      // Usamos un mapeo para evitar que un fallo en un archivo rompa toda la instalación
       return Promise.all(
         urlsToPrecache.map(url => {
           return cache.add(url).catch(err => {
@@ -24,33 +21,30 @@ self.addEventListener('install', event => {
       );
     })
   );
-  self.skipWaiting(); // Activar inmediatamente
+  self.skipWaiting();
 });
 
 // Estrategia: Network first, fallback a caché para navegación
 self.addEventListener('fetch', event => {
   if (event.request.url.startsWith('chrome-extension://')) return;
 
-  // Si es una petición de navegación (el usuario recarga o entra a una ruta)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        // Corregido a ruta relativa para que funcione en subcarpetas de GitHub Pages
         return caches.match('./index.html') || caches.match('./');
       })
     );
     return;
   }
 
-  // Para otros recursos, intentar red primero, luego caché
+  // Para otros recursos, intentar red primero, luego guardar copia en caché
   event.respondWith(
     fetch(event.request).then(response => {
-      // Si la respuesta es exitosa, guardamos una copia en caché de archivos estáticos clave
       if (response.ok && (
         event.request.url.endsWith('.css') || 
         event.request.url.endsWith('.js') || 
         event.request.url.endsWith('.svg') ||
-        event.request.url.endsWith('.png') || // Añadidos para guardar tus iconos y assets
+        event.request.url.endsWith('.png') ||
         event.request.url.includes('/icons/')
       )) {
         const responseClone = response.clone();
@@ -61,7 +55,7 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Activar: limpiar cachés antiguas
+// Activar: limpiar versiones de caché antiguas
 self.addEventListener('activate', event => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(

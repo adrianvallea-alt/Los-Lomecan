@@ -2,6 +2,7 @@
   "name": "Lomecan · Tu ecosistema de salud",
   "short_name": "Los Lomecan",
   "description": "Tu compañero de fitness y nutrición de élite.",
+  "id": "/Los-Lomecan/",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#09090B",
@@ -15,13 +16,8 @@
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512-maskable.png",
-      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }

@@ -23,25 +23,23 @@
     <meta property="og:description" content="Fitness y nutrición de élite en tu bolsillo." />
     <meta property="og:type" content="website" />
     
-    <!-- Pre-conexión a Supabase -->
+    <!-- Pre-conexión a Supabase (Cambia TU_PROYECTO por tu subdominio real) -->
     <link rel="dns-prefetch" href="https://[TU_PROYECTO].supabase.co" />
     
     <!-- Registrar Service Worker -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Cambiado a ruta relativa './' para que funcione en Local y GitHub Pages
           navigator.serviceWorker.register('./service-worker.js')
-            .then(reg => console.log('Service Worker registrado:', reg.scope))
+            .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
             .catch(err => console.error('Error al registrar SW:', err));
         });
       }
     </script>
-    <script type="module" crossorigin src="/Los-Lomecan/assets/index-8_J1nW9U.js"></script>
-    <link rel="stylesheet" crossorigin href="/Los-Lomecan/assets/index--3YajqD4.css">
+    <script type="module" crossorigin src="/Los-Lomecan/assets/index-PttIpeAF.js"></script>
+    <link rel="stylesheet" crossorigin href="/Los-Lomecan/assets/index-C2pyacXB.css">
   </head>
   <body>
     <div id="root"></div>
-    <!-- Vite maneja esta ruta absoluta automáticamente durante el build, la dejamos así -->
   </body>
 </html>
