@@ -44,7 +44,6 @@ export default function App() {
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
 
-  // Cargar perfiles
   useEffect(() => {
     const loadProfiles = async () => {
       try {
@@ -325,7 +324,8 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pt-4 pb-24 flex flex-col">
+        {/* 🔥 Eliminado el pb- para que cada componente maneje su propio espacio inferior */}
+        <div className="flex-1 overflow-y-auto pt-4 flex flex-col">
           {renderContent()}
         </div>
 
