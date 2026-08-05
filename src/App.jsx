@@ -324,7 +324,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* 🔥 Eliminado el pb- para que cada componente maneje su propio espacio inferior */}
+        {/* 🔥 Se quitó el pb- para que cada componente maneje su propio espacio inferior */}
         <div className="flex-1 overflow-y-auto pt-4 flex flex-col">
           {renderContent()}
         </div>

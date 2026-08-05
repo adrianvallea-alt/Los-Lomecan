@@ -5,7 +5,7 @@ import MealSuggestions from './MealSuggestions';
 import ShareAchievementModal from './ShareAchievementModal';
 
 // ==========================================================================
-// CÍRCULO DE AGUA – Estable, sin cambios de layout
+// CÍRCULO DE AGUA
 // ==========================================================================
 const WaterCircle = memo(({ percent }) => {
   const getMotivationalMessage = (p) => {
@@ -63,7 +63,7 @@ const WaterCircle = memo(({ percent }) => {
 });
 
 // ==========================================================================
-// COMPONENTE AISLADO DEL AGUA – Se renderiza solo al cambiar el agua
+// TRACKER DE AGUA
 // ==========================================================================
 const WaterTracker = memo(({ waterGoal, profileId }) => {
   const storageKey = `water_${profileId}_${new Date().toDateString()}`;
@@ -74,7 +74,6 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
   const [manualInput, setManualInput] = useState('');
 
   useEffect(() => {
-    // Escritura asíncrona en localStorage para no bloquear el renderizado
     const timeout = setTimeout(() => {
       localStorage.setItem(storageKey, waterCurrent);
     }, 0);
@@ -102,11 +101,9 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
             {waterCurrent} / {waterGoal} ml
           </span>
         </div>
-
         <div className="w-full py-2" style={{ minHeight: '180px' }}>
           <WaterCircle percent={waterPercent} />
         </div>
-
         <div className="flex items-center justify-between w-full bg-white/[0.02] border border-white/[0.04] rounded-2xl p-2.5 mt-4">
           <button
             onClick={() => removeWater(250)}
@@ -134,7 +131,6 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
             <Plus size={14} />
           </button>
         </div>
-
         <div className="flex justify-between items-center w-full mt-3 text-[10px]">
           <button
             onClick={() => setWaterCurrent(waterGoal)}
@@ -152,7 +148,7 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
 });
 
 // ==========================================================================
-// MACROBAR – memoizada
+// MACROBAR
 // ==========================================================================
 const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
   const percent = Math.min((current / max) * 100, 100);
@@ -176,7 +172,7 @@ const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
 });
 
 // ==========================================================================
-// ANILLO DE CALORÍAS – memoizado
+// ANILLO DE CALORÍAS
 // ==========================================================================
 const CalorieRing = memo(({ current, max }) => {
   const remaining = max - current;
@@ -227,13 +223,13 @@ const CalorieRing = memo(({ current, max }) => {
 });
 
 // ==========================================================================
-// DASHBOARD PRINCIPAL – Ya no maneja el estado del agua
+// DASHBOARD PRINCIPAL
 // ==========================================================================
 export default function Dashboard({
   profile,
   dailyIntake,
-  currentRoutine,
-  onStartWorkout,
+  currentRoutine,    // <-- ya no se usa, pero se mantiene para no romper la interfaz
+  onStartWorkout,    // <-- ya no se usa, pero se mantiene
   onGoToRoutines,
   onGoToEvolution,
   onAddFood
@@ -275,10 +271,9 @@ export default function Dashboard({
   };
 
   return (
-    <div className="flex-1 flex flex-col px-5 pt-8 pb-40 text-white bg-[#09090B] select-none min-h-screen relative overflow-y-auto">
+    <div className="flex flex-col px-5 pt-0 pb-[80px] text-white bg-[#09090B] select-none relative">
       <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[radial-gradient(circle_at_50%_0%,#ffffff10,transparent_70%)]" />
 
-      {/* Header + racha */}
       <div className="flex items-center justify-between mb-5 relative z-10 shrink-0">
         <div className="flex items-center gap-2">
           <Sun size={14} className="text-[#d4ff00]" />
@@ -300,14 +295,12 @@ export default function Dashboard({
         </button>
       </div>
 
-      {/* Tarjeta de Calorías */}
       <div className="relative z-10 mb-4 shrink-0">
         <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2.5rem] p-5 flex flex-col items-center">
           <CalorieRing current={todayData.cal.current} max={todayData.cal.max} />
         </div>
       </div>
 
-      {/* Macros */}
       <div className="relative z-10 mb-4 shrink-0">
         <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2rem] p-5 flex flex-col gap-4">
           <MacroBar label="Proteína" current={todayData.pro.current} max={todayData.pro.max} color="#60a5fa" />
@@ -316,16 +309,13 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* Sugerencias */}
       <div className="mb-4 relative z-10 shrink-0">
         <MealSuggestions remainingMacros={remainingMacros} goals={goals} onAddFood={onAddFood} />
       </div>
 
-      {/* Componente aislado del agua – se re‑renderiza solo */}
       <WaterTracker waterGoal={profile?.water_goal || 2000} profileId={profile?.id} />
 
-      {/* Acciones */}
-      <div className="flex flex-col gap-3 relative z-10 shrink-0 pb-6">
+      <div className="flex flex-col gap-3 relative z-10 shrink-0">
         <button
           onClick={onGoToEvolution}
           className="mx-auto flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-stone-400 hover:text-white transition-all bg-white/[0.02] border border-white/[0.05] rounded-full px-5 py-2.5 active:scale-95"
@@ -334,16 +324,16 @@ export default function Dashboard({
           Registrar peso
         </button>
 
+        {/* 🔽 Botón de entrenamiento: siempre abre la lista de rutinas */}
         <button
-          onClick={currentRoutine ? onStartWorkout : onGoToRoutines}
+          onClick={onGoToRoutines}
           className="w-full h-14 rounded-2xl flex items-center justify-center gap-3.5 transition-all duration-300 active:scale-[0.98] uppercase tracking-[0.15em] font-semibold text-xs text-stone-950 bg-white hover:bg-stone-100 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
         >
           <Play size={12} fill="currentColor" />
-          {currentRoutine ? 'Comenzar Entrenamiento' : 'Elegir una Rutina'}
+          Mis Rutinas
         </button>
       </div>
 
-      {/* Modal de compartir */}
       {showShareModal && (
         <ShareAchievementModal
           profile={profile}

@@ -30,7 +30,15 @@ const AnimatedView = ({ children, isActive }) => (
   </div>
 );
 
-export default function GymTracker({ activeProfile, routines, onUpdateRoutines, openLibrary, onLibraryOpened, addToQueue, currentRoutine }) {
+export default function GymTracker({ 
+  activeProfile, 
+  routines, 
+  onUpdateRoutines, 
+  openLibrary, 
+  onLibraryOpened, 
+  addToQueue,
+  // Eliminamos currentRoutine porque ya no se usa
+}) {
   const [view, setView] = useState('routineList');
   const [previousView, setPreviousView] = useState('routineList');
   const [activeRoutine, setActiveRoutine] = useState(null);
@@ -47,7 +55,6 @@ export default function GymTracker({ activeProfile, routines, onUpdateRoutines, 
 
   const libraryCache = useRef(null);
   const isAdmin = activeProfile?.id === 'adrian';
-  const hasAutoStarted = useRef(false);
 
   const navigate = useCallback((nextView) => {
     setPreviousView(view);
@@ -72,7 +79,7 @@ export default function GymTracker({ activeProfile, routines, onUpdateRoutines, 
       else navigate('library');
       onLibraryOpened?.();
     }
-  }, [openLibrary]);
+  }, [openLibrary, libraryPassword, navigate, onLibraryOpened]);
 
   // Cargar historial completo
   const loadAllHistory = useCallback(async () => {
@@ -119,30 +126,12 @@ export default function GymTracker({ activeProfile, routines, onUpdateRoutines, 
     setCompletedDaysMap(completed);
   }, [activeProfile]);
 
-  useEffect(() => { if (activeProfile) loadAllHistory(); }, [activeProfile, loadAllHistory]);
+  useEffect(() => { 
+    if (activeProfile) loadAllHistory(); 
+  }, [activeProfile, loadAllHistory]);
 
-  // Auto-inicio: si viene una rutina del dashboard y no hemos auto-iniciado ya
-  useEffect(() => {
-    if (currentRoutine && !hasAutoStarted.current && !openLibrary) {
-      hasAutoStarted.current = true;
-      setActiveRoutine(currentRoutine);
-      const completed = completedDaysMap?.[currentRoutine.id] || new Set();
-      const days = currentRoutine.trainingDays || [];
-      let targetDay = 0;
-      for (let i = 0; i < days.length; i++) {
-        if (!completed.has(i)) {
-          targetDay = i;
-          break;
-        }
-      }
-      startWorkout(currentRoutine, targetDay);
-    }
-  }, [currentRoutine, completedDaysMap, openLibrary]);
-
-  // Reiniciar el flag cuando se desmonta o se sale del tracker
-  const resetAutoStart = () => {
-    hasAutoStarted.current = false;
-  };
+  // ⚠️ ELIMINADO: useEffect que auto-iniciaba la rutina
+  // Ya no existe la variable hasAutoStarted ni el auto-start
 
   const loadHistoryAndRecords = async (routineId, dayIndex) => {
     try {
@@ -162,7 +151,6 @@ export default function GymTracker({ activeProfile, routines, onUpdateRoutines, 
   };
 
   const handleSelectRoutine = (routine) => {
-    resetAutoStart();
     setActiveRoutine(routine);
     navigate('daySelector');
   };
@@ -383,12 +371,10 @@ export default function GymTracker({ activeProfile, routines, onUpdateRoutines, 
                 window.dispatchEvent(new CustomEvent('newPRs', { detail: brokenPRs }));
               }
 
-              resetAutoStart();
               navigate('finished');
               window.dispatchEvent(new Event('workoutFinished'));
             }}
             onGoBack={() => {
-              resetAutoStart();
               navigate('daySelector');
             }}
           />
@@ -396,7 +382,6 @@ export default function GymTracker({ activeProfile, routines, onUpdateRoutines, 
       case 'finished':
         return (
           <FinishedView onRestart={() => {
-            resetAutoStart();
             navigate('routineList');
             setActiveRoutine(null);
             setActiveDayIndex(null);
