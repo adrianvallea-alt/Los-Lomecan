@@ -23,7 +23,6 @@ export async function deleteProfile(profileId) {
 }
 
 // ==================== RUTINAS GLOBALES ====================
-
 export async function fetchUserRoutines(profileId) {
   try {
     const { data: assignments, error: assignError } = await supabase
@@ -40,7 +39,7 @@ export async function fetchUserRoutines(profileId) {
       .from('routines')
       .select('*')
       .in('id', routineIds)
-      .is('deleted_at', null); // 🔥 Solo traemos las que NO están en la papelera
+      .is('deleted_at', null);
 
     if (routinesError) throw routinesError;
 
@@ -63,7 +62,7 @@ export async function fetchAllGlobalRoutines() {
   const { data, error } = await supabase
     .from('routines')
     .select('*')
-    .is('deleted_at', null) // 🔥 Ocultamos las que están en la papelera
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -105,51 +104,38 @@ export async function saveUserRoutine(profileId, routine) {
 }
 
 // ================================================================
-// 🔥 BORRADO INTELIGENTE (Seguro para Adrián) 🔥
+// 🔥 CORRECCIÓN FINAL: ELIMINACIÓN SEGURA PARA ADRIÁN 🔥
 // ================================================================
 export async function deleteUserRoutine(profileId, routineId) {
-  // 1. Verificar quién es el dueño de la rutina
-  const { data: routine, error: fetchError } = await supabase
-    .from('routines')
-    .select('created_by')
-    .eq('id', routineId)
-    .single();
-
-  if (fetchError) throw fetchError;
-
-  const isAdrian = profileId === 'adrian';
-  const isCreator = routine.created_by === profileId;
-
-  if (isAdrian || isCreator) {
-    // CASO 1: Adrián o el creador original la borra.
-    // Se manda a la "papelera" (Soft Delete). Se puede recuperar después.
+  // CASO 1: Adrián. Tiene el poder de "Soft Delete" (papelera). 
+  // Si se arrepiente, la podrá recuperar más adelante.
+  if (profileId === 'adrian') {
     const { error } = await supabase
       .from('routines')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', routineId);
-
     if (error) throw error;
-  } else {
-    // CASO 2: Un perfil secundario (ej. Esposa, NAYE) la borra.
-    // NO se borra de la base de datos. SOLO se desvincula de ese perfil.
-    // Adrián la seguirá teniendo intacta en su cuenta.
-    const { error: deleteAssignError } = await supabase
-      .from('profile_routines')
-      .delete()
-      .eq('profile_id', profileId)
-      .eq('routine_id', routineId);
-
-    if (deleteAssignError) throw deleteAssignError;
+    return; // Termina aquí.
   }
-}
 
-// 🔥 FUNCIÓN PARA RECUPERAR RUTINAS DE LA PAPELERA 🔥
+  // CASO 2: CUALQUIER OTRO PERFIL (NAYE, Esposa, Hermano, etc.).
+  // ¡NUNCA se toca la tabla global 'routines'! Solo se desvincula de su perfil.
+  // Esto protege a Adrián al 100%, incluso si NAYE fue la creadora original.
+  const { error: deleteAssignError } = await supabase
+    .from('profile_routines')
+    .delete()
+    .eq('profile_id', profileId)
+    .eq('routine_id', routineId);
+
+  if (deleteAssignError) throw deleteAssignError;
+}
+// ================================================================
+
 export async function restoreRoutine(routineId) {
   const { error } = await supabase
     .from('routines')
     .update({ deleted_at: null })
     .eq('id', routineId);
-
   if (error) throw error;
 }
 
@@ -160,7 +146,6 @@ export async function importRoutineToProfile(profileId, routineId) {
       profile_id: profileId,
       routine_id: routineId
     });
-
   if (error) throw error;
 }
 
