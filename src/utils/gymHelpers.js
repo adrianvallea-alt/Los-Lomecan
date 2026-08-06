@@ -1,12 +1,19 @@
 export const MONTHS = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
-export const getCurrentMonth = () => new Date().getMonth() + 1;
-export const getCurrentYear = () => new Date().getFullYear();
-export const generateId = () => crypto.randomUUID();
+export const getCurrentMonth = () => {
+  return new Date().getMonth() + 1;
+};
 
+export const getCurrentYear = () => {
+  return new Date().getFullYear();
+};
+
+export const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+};
 export const getLastSetData = (lastSession, exerciseId, setNum, libraryExerciseId) => {
   if (!lastSession) return null;
   const ex = lastSession.exercises.find(e =>
@@ -50,14 +57,10 @@ export const getDayRecords = (sessionsSameDay) => {
 };
 
 export const limitHistory = (historyArray, max = 30) => historyArray.slice(-max);
-/**
- * Calcula el peso sugerido para la siguiente sesión basado en el último entrenamiento.
- * Si se completaron todas las series con el peso indicado, sugiere aumentar 2.5 kg.
- * Si no, mantiene el mismo peso.
- */
+
 export const getSuggestedWeight = (lastSets, defaultWeight) => {
   if (!lastSets || lastSets.length === 0) return defaultWeight || '';
-  const allDone = lastSets.every(s => s.done !== false); // considera done o undefined como true
+  const allDone = lastSets.every(s => s.done !== false);
   const lastWeight = parseFloat(lastSets[0]?.weight) || 0;
   if (allDone && lastWeight > 0) {
     return (lastWeight + 2.5).toFixed(1);
@@ -65,9 +68,6 @@ export const getSuggestedWeight = (lastSets, defaultWeight) => {
   return lastWeight > 0 ? lastWeight.toString() : (defaultWeight || '');
 };
 
-/**
- * Devuelve las repeticiones sugeridas (las mismas de la última sesión).
- */
 export const getSuggestedReps = (lastSets, defaultReps) => {
   if (!lastSets || lastSets.length === 0) return defaultReps || '';
   return lastSets[0]?.reps || defaultReps || '';

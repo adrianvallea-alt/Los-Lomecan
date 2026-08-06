@@ -11,7 +11,17 @@ import IntroScreen from './components/IntroScreen';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
 import { Edit3, Users, Lock } from 'lucide-react';
-import { fetchProfiles, fetchRoutines, fetchDailyIntake, addDailyIntakeItem, updateProfile } from './lib/dataService';
+import { 
+  fetchProfiles, 
+  fetchUserRoutines, 
+  fetchAllGlobalRoutines,
+  saveUserRoutine,
+  deleteUserRoutine,
+  importRoutineToProfile,
+  fetchDailyIntake, 
+  addDailyIntakeItem, 
+  updateProfile 
+} from './lib/dataService';
 import useReminders from './hooks/useReminders';
 import useOfflineQueue from './hooks/useOfflineQueue';
 
@@ -44,6 +54,7 @@ export default function App() {
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
 
+  // ========== CARGAR PERFILES ==========
   useEffect(() => {
     const loadProfiles = async () => {
       try {
@@ -66,26 +77,50 @@ export default function App() {
     loadProfiles();
   }, []);
 
+  // Guardar perfiles en localStorage
   useEffect(() => {
     if (profiles.length > 0) localStorage.setItem('userProfiles', JSON.stringify(uniqueById(profiles)));
   }, [profiles]);
 
+  // ========== CARGAR RUTINAS DESDE SUPABASE ==========
+  const loadRoutines = async (profileId) => {
+    if (!profileId) return [];
+    try {
+      const routines = await fetchUserRoutines(profileId);
+      // Guardar en caché local
+      localStorage.setItem(`userRoutines_${profileId}`, JSON.stringify(routines));
+      return routines;
+    } catch (err) {
+      console.error('Error cargando rutinas desde Supabase:', err);
+      // Fallback a caché local
+      const cached = localStorage.getItem(`userRoutines_${profileId}`);
+      return cached ? JSON.parse(cached) : [];
+    }
+  };
+
+  useEffect(() => {
+    if (!activeProfile) {
+      setRoutines([]);
+      return;
+    }
+    loadRoutines(activeProfile.id).then(setRoutines);
+  }, [activeProfile]);
+
+  // ========== CARGAR INGESTA DIARIA ==========
   useEffect(() => {
     if (!activeProfile) return;
     const loadData = async () => {
       try {
-        const supabaseRoutines = await fetchRoutines(activeProfile.id);
-        setRoutines(supabaseRoutines.length > 0 ? supabaseRoutines : JSON.parse(localStorage.getItem(`workoutRoutines_${activeProfile.id}`) || '[]'));
         const supabaseIntake = await fetchDailyIntake(activeProfile.id);
         setDailyIntake(supabaseIntake.length > 0 ? supabaseIntake : JSON.parse(localStorage.getItem(`dailyIntake_${activeProfile.id}`) || '[]'));
       } catch (err) {
-        setRoutines(JSON.parse(localStorage.getItem(`workoutRoutines_${activeProfile.id}`) || '[]'));
         setDailyIntake(JSON.parse(localStorage.getItem(`dailyIntake_${activeProfile.id}`) || '[]'));
       }
     };
     loadData();
   }, [activeProfile]);
 
+  // ========== ONBOARDING ==========
   useEffect(() => {
     if (activeProfile) {
       const needsOnboarding = !activeProfile.weight || !activeProfile.height || !activeProfile.age;
@@ -93,11 +128,52 @@ export default function App() {
     }
   }, [activeProfile]);
 
-  const updateRoutines = (newRoutines) => {
+  // ========== FUNCIONES DE RUTINAS ==========
+  const updateRoutines = async (newRoutines) => {
     setRoutines(newRoutines);
-    if (activeProfile) localStorage.setItem(`workoutRoutines_${activeProfile.id}`, JSON.stringify(newRoutines));
+    if (activeProfile) {
+      // Guardar en caché local
+      localStorage.setItem(`userRoutines_${activeProfile.id}`, JSON.stringify(newRoutines));
+      
+      // Guardar cada rutina en Supabase
+      for (const routine of newRoutines) {
+        try {
+          await saveUserRoutine(activeProfile.id, routine);
+        } catch (err) {
+          console.error('Error guardando rutina:', routine.name, err);
+          // Si falla, añadir a la cola de offline
+          addToQueue('saveRoutine', { profileId: activeProfile.id, routine });
+        }
+      }
+      
+      // Limpiar rutinas que ya no existen en la lista
+      const existingIds = new Set(newRoutines.map(r => r.id));
+      for (const routine of routines) {
+        if (!existingIds.has(routine.id)) {
+          try {
+            await deleteUserRoutine(activeProfile.id, routine.id);
+          } catch (err) {
+            console.error('Error eliminando rutina:', routine.name, err);
+          }
+        }
+      }
+    }
   };
 
+  const importRoutine = async (routineId) => {
+    if (!activeProfile) return;
+    try {
+      await importRoutineToProfile(activeProfile.id, routineId);
+      // Recargar rutinas
+      const updated = await loadRoutines(activeProfile.id);
+      setRoutines(updated);
+    } catch (err) {
+      console.error('Error importando rutina:', err);
+      alert('No se pudo importar la rutina. Intenta de nuevo.');
+    }
+  };
+
+  // ========== FUNCIONES DE COMIDA ==========
   const addFoodToDay = async (food, grams) => {
     const newEntry = {
       id: Date.now(),
@@ -126,6 +202,7 @@ export default function App() {
     }
   };
 
+  // ========== FUNCIONES DE PERFIL ==========
   const handleUpdateProfileName = async (newName) => {
     if (!activeProfile || !newName.trim()) return;
     const updatedProfiles = profiles.map(p => p.id === activeProfile.id ? { ...p, name: newName.trim() } : p);
@@ -172,6 +249,7 @@ export default function App() {
     localStorage.setItem('userProfiles', JSON.stringify(cleaned));
   };
 
+  // ========== RENDERIZADO ==========
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const currentRoutine = routines.find(r => r.month === currentMonth && r.year === currentYear);
@@ -248,16 +326,16 @@ export default function App() {
         );
       case 'alimentos':
         return <FoodCatalog onAddToDay={addFoodToDay} />;
-      case 'gimnasio':
+            case 'gimnasio':
         return (
           <GymTracker
-            routines={routines}
-            onUpdateRoutines={updateRoutines}
-            activeProfile={activeProfile}
+            activeProfile={activeProfile}      // ✅ Importante: Recibe el perfil activo
+            routines={routines}                // ✅ Las rutinas
+            onUpdateRoutines={updateRoutines}  // ✅ Función para actualizar
             openLibrary={openLibrary}
             onLibraryOpened={() => setOpenLibrary(false)}
             addToQueue={addToQueue}
-            currentRoutine={currentRoutine}
+            onImportRoutine={importRoutine}    // ✅ Esta prop la usa el código complejo
           />
         );
       case 'evolucion':
@@ -324,7 +402,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* 🔥 Se quitó el pb- para que cada componente maneje su propio espacio inferior */}
         <div className="flex-1 overflow-y-auto pt-4 flex flex-col">
           {renderContent()}
         </div>

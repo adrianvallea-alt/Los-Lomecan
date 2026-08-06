@@ -23,25 +23,40 @@
     <meta property="og:description" content="Fitness y nutrición de élite en tu bolsillo." />
     <meta property="og:type" content="website" />
     
-    <!-- Pre-conexión a Supabase (Cambia TU_PROYECTO por tu subdominio real) -->
-    <link rel="dns-prefetch" href="https://[TU_PROYECTO].supabase.co" />
+    <!-- Pre-conexión a Supabase (CORREGIDO) -->
+    <link rel="dns-prefetch" href="https://tdkfxugklrzizccbypqm.supabase.co" />
     
-    <!-- Registrar Service Worker y CAPTURAR el evento de instalación al instante -->
+    <!-- Registrar Service Worker y CAPTURAR el evento de instalación -->
     <script>
-      // 1. Capturar el evento de instalación antes de que cargue React para evitar carreras de tiempo
+      // 1. Capturar el evento de instalación antes de que cargue React
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         window.deferredPrompt = e;
-        // Avisar a React por si el componente ya se montó
         window.dispatchEvent(new CustomEvent('lomecan-prompt-ready'));
       });
 
-      // 2. Registro del Service Worker
+      // 2. Registro del Service Worker (con soporte para recarga automática)
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./service-worker.js')
-            .then(reg => console.log('Service Worker registrado con éxito:', reg.scope))
-            .catch(err => console.error('Error al registrar SW:', err));
+            .then(reg => {
+              console.log('✅ Service Worker registrado con éxito:', reg.scope);
+              
+              // Escuchar actualizaciones del SW
+              reg.addEventListener('updatefound', () => {
+                const newSW = reg.installing;
+                newSW.addEventListener('statechange', () => {
+                  if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('🔄 Nueva versión del Service Worker disponible. Recarga la página.');
+                    // Mostrar un mensaje al usuario
+                    if (confirm('Nueva versión disponible. ¿Recargar para actualizar?')) {
+                      window.location.reload();
+                    }
+                  }
+                });
+              });
+            })
+            .catch(err => console.error('❌ Error al registrar SW:', err));
         });
       }
     </script>
