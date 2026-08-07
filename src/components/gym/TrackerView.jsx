@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Dumbbell, Award, Clock, Info, Star, Timer, Pause, Play, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, Dumbbell, Award, Clock, Star, Timer, Pause, Play, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import ExerciseDetailModal from './ExerciseDetailModal';
 import { getLastSetData } from '../../utils/gymHelpers';
 
@@ -103,8 +103,6 @@ export default function TrackerView({
         sets: ex.sets.map(s => ({
           setNum: s.setNum,
           weight: s.weight || '',
-          // Guardar el número real de repeticiones (lo que el usuario puso en repsDone)
-          // Si no hay repsDone, usar el rango como string? Mejor dejar vacío si no hay.
           reps: s.repsDone || '',
           done: s.done || false
         }))
@@ -204,7 +202,27 @@ export default function TrackerView({
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
+                    {/* ==================================================== */}
+                    {/* 🔥 AQUÍ ESTÁ EL BOTÓN CON TOOLTIP QUE FALTABA 🔥 */}
+                    {/* ==================================================== */}
                     <h3 className="text-white font-semibold text-sm truncate">{ex.name}</h3>
+                    
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); // Evita expandir la tarjeta al hacer clic en el ojo
+                        setDetailExercise(ex); 
+                      }}
+                      className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-[#D4FF00] hover:border-[#D4FF00]/30 transition-colors relative group ml-1"
+                      title="Ver guía y video" // Tooltip nativo del navegador
+                    >
+                      <Eye size={14} />
+                      {/* Tooltip personalizado visualmente bonito */}
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-[#09090B] border border-white/[0.08] text-[10px] text-zinc-300 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
+                        Ver guía y video
+                      </span>
+                    </button>
+                    {/* ==================================================== */}
+
                     {completedSets === totalSets && totalSets > 0 && (
                       <Check size={14} className="text-[#D4FF00] flex-shrink-0" />
                     )}
@@ -333,6 +351,7 @@ export default function TrackerView({
         </div>
       )}
 
+      {/* 🎬 Renderizado del modal al final del componente */}
       {detailExercise && <ExerciseDetailModal exercise={detailExercise} onClose={() => setDetailExercise(null)} />}
 
       <style>{`
@@ -349,4 +368,4 @@ export default function TrackerView({
       `}</style>
     </div>
   );
-}
+      }
