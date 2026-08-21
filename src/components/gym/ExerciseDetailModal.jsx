@@ -37,6 +37,7 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
       >
         <div className="w-12 h-1.5 bg-white/[0.08] rounded-full mx-auto mt-4 sm:hidden" />
 
+        {/* Cabecera */}
         <div className="px-6 pt-4 pb-3 flex justify-between items-start">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -57,6 +58,7 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
           </button>
         </div>
 
+        {/* Contenido desplazable */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
           {exercise.description && (
             <div>
@@ -74,11 +76,11 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
               <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
                 Demostración
               </h3>
-              {!navigator.onLine ? (
+              {!navigator.onLine && !isYouTube ? (
                 <div className="flex flex-col items-center justify-center py-10 text-zinc-500 gap-3">
                   <WifiOff size={22} className="text-zinc-600" />
                   <p className="text-sm font-medium">Sin conexión a internet</p>
-                  <p className="text-xs text-zinc-600">No se puede cargar el video.</p>
+                  <p className="text-xs text-zinc-600">El video estará disponible cuando vuelvas a estar en línea.</p>
                 </div>
               ) : (
                 <div className="rounded-2xl overflow-hidden bg-[#09090B] border border-[#D4FF00]/30 shadow-[0_0_20px_rgba(212,255,0,0.1)]">
@@ -138,6 +140,7 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
           )}
         </div>
 
+        {/* Botón cerrar móvil */}
         <div className="p-4 border-t border-white/[0.05] sm:hidden">
           <button
             onClick={onClose}
