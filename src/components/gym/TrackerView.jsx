@@ -178,7 +178,7 @@ export default function TrackerView({
       </div>
 
       {/* Contenedor scrollable con padding inferior extra */}
-      <div className="flex-1 overflow-y-auto px-5 pb-26 space-y-4">
+     <div className="flex-1 overflow-y-auto px-5 pb-40 space-y-4">
         {exercises.map(ex => {
           const exKey = ex.libraryExerciseId || ex.id;
           const record = personalRecords[exKey];
@@ -285,7 +285,7 @@ export default function TrackerView({
       {/* Botón finalizar flotante, sin caja negra */}
 <div
   className="absolute bottom-0 left-0 right-0 z-20 px-4"
-  style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 95px)' }}
+  style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 100px)' }}
 >
   <button
     onClick={handleFinish}
