@@ -52,19 +52,6 @@ export default function App() {
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
 
-  // ========== EVITAR PULL-TO-REFRESH ==========
-  useEffect(() => {
-    // Solo como refuerzo para navegadores antiguos que no soporten overscroll-behavior
-    const preventPullToRefresh = (e) => {
-      // No bloqueamos el scroll normal, solo evitamos el gesto de recarga si hay un toque en la parte superior
-      if (window.scrollY === 0 && e.touches && e.touches[0] && e.touches[0].clientY > 0) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
-    return () => document.removeEventListener('touchmove', preventPullToRefresh);
-  }, []);
-
   // ========== CARGAR PERFILES ==========
   useEffect(() => {
     const loadProfiles = async () => {
@@ -388,7 +375,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pt-4 flex flex-col overscroll-none">
+        <div className="flex-1 overflow-y-auto pt-4 flex flex-col overscroll-none touch-pan-y">
           {renderContent()}
         </div>
 

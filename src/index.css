@@ -15,7 +15,6 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Evitar pull-to-refresh en toda la app */
   html,
   body,
   #root {
@@ -24,7 +23,12 @@
   }
 }
 
-/* Clase utilitaria para aplicar a contenedores con scroll */
+/* Clase para permitir scroll táctil vertical sin rebote */
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+/* Clase general para desactivar overscroll en contenedores */
 .overscroll-none {
   overscroll-behavior: none;
 }
@@ -92,7 +96,6 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
-/* Clases de animación (sin cambios) */
 .animate-shake {
   animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
 }
