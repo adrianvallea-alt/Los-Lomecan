@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Info, Video } from 'lucide-react';
 
 const getYouTubeId = (url) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -32,24 +32,28 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-lg bg-[#0A0A0C] border border-white/[0.08] sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden shadow-2xl shadow-black/40 animate-scale-in"
+        className="w-full sm:max-w-lg bg-[#0A0A0C] border border-[#D4FF00]/20 sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden shadow-2xl shadow-black/50 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Indicador de arrastre premium */}
         <div className="w-12 h-1.5 bg-white/[0.08] rounded-full mx-auto mt-4 sm:hidden" />
 
-        {/* Cabecera */}
+        {/* Cabecera con acento neón */}
         <div className="px-6 pt-4 pb-3 flex justify-between items-start">
           <div>
-            <h2 className="text-lg font-bold text-white">{exercise.name}</h2>
-            <p className="text-xs text-[#D4FF00]/80 mt-0.5">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              {exercise.name}
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#D4FF00] shadow-[0_0_6px_rgba(212,255,0,0.7)]" />
+            </h2>
+            <p className="text-xs text-[#D4FF00]/90 mt-0.5 flex items-center gap-1">
+              <Info size={12} className="text-[#D4FF00]" />
               {exercise.muscle}
               {exercise.secondaryMuscles ? ` + ${exercise.secondaryMuscles}` : ''}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="ml-2 p-2.5 rounded-full bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white active:scale-95 transition-all"
+            className="ml-2 p-2.5 rounded-full bg-white/[0.03] border border-white/[0.08] text-zinc-400 hover:text-white hover:border-[#D4FF00]/40 hover:shadow-[0_0_12px_rgba(212,255,0,0.2)] active:scale-95 transition-all"
             aria-label="Cerrar"
           >
             <X size={20} />
@@ -60,7 +64,8 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
           {exercise.description && (
             <div>
-              <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Info size={14} className="text-[#D4FF00]" />
                 Instrucciones
               </h3>
               <div className="text-sm text-zinc-300 whitespace-pre-wrap break-words leading-relaxed">
@@ -71,10 +76,11 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
 
           {exercise.video_url && (
             <div>
-              <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Video size={14} className="text-[#D4FF00]" />
                 Demostración
               </h3>
-              <div className="rounded-2xl overflow-hidden bg-[#09090B] border border-white/[0.06]">
+              <div className="rounded-2xl overflow-hidden bg-[#09090B] border border-[#D4FF00]/30 shadow-[0_0_20px_rgba(212,255,0,0.1)]">
                 {isYouTube ? (
                   videoError ? (
                     <div className="flex flex-col items-center justify-center py-10 text-zinc-500 gap-3">
@@ -123,18 +129,18 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
           {!exercise.description && !exercise.video_url && (
             <div className="flex flex-col items-center justify-center py-12 text-zinc-500 gap-3">
               <div className="w-12 h-12 rounded-full bg-white/[0.03] border border-white/[0.05] flex items-center justify-center">
-                <AlertTriangle size={22} />
+                <AlertTriangle size={22} className="text-zinc-600" />
               </div>
               <p className="text-sm">No hay información adicional.</p>
             </div>
           )}
         </div>
 
-        {/* Botón cerrar móvil */}
+        {/* Botón cerrar móvil con neón */}
         <div className="p-4 border-t border-white/[0.05] sm:hidden">
           <button
             onClick={onClose}
-            className="w-full py-3.5 bg-white/[0.03] border border-white/[0.08] rounded-2xl text-white text-sm font-medium active:scale-[0.98] transition-all"
+            className="w-full py-3.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-2xl text-[#D4FF00] text-sm font-medium active:scale-[0.98] transition-all hover:bg-[#D4FF00]/20 hover:shadow-[0_0_15px_rgba(212,255,0,0.3)]"
           >
             Cerrar
           </button>

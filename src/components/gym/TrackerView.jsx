@@ -33,14 +33,12 @@ export default function TrackerView({
   const DRAFT_KEY = `draft_${activeRoutine.id}_${activeDayIndex}`;
   const exerciseRefs = useRef({});
 
-  // Cargar ejercicios de la librería para enriquecer
   useEffect(() => {
     fetchAllExercises()
       .then(data => setLibraryExercises(data))
       .catch(err => console.error('Error cargando ejercicios de librería:', err));
   }, []);
 
-  // Cargar borrador
   useEffect(() => {
     const saved = localStorage.getItem(DRAFT_KEY);
     if (saved) {
@@ -58,7 +56,6 @@ export default function TrackerView({
     }
   }, []);
 
-  // Guardar borrador automáticamente
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(exercises));
@@ -66,7 +63,6 @@ export default function TrackerView({
     return () => clearTimeout(timer);
   }, [exercises, DRAFT_KEY]);
 
-  // Temporizador de descanso
   useEffect(() => {
     if (restTimer.running && restTimer.seconds > 0) {
       timerRef.current = setInterval(() => setRestTimer(prev => ({ ...prev, seconds: prev.seconds - 1 })), 1000);
@@ -143,47 +139,41 @@ export default function TrackerView({
 
   return (
     <div className="flex flex-col h-full bg-[#09090B] safe-top safe-bottom relative">
-      {/* Temporizador de descanso flotante */}
+      {/* Temporizador de descanso flotante con neón */}
       {restTimer.active && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 bg-[#0A0A0C] backdrop-blur-xl border border-white/[0.08] rounded-2xl px-5 py-3 flex items-center gap-4 shadow-2xl shadow-black/30 animate-slide-up">
-          <Timer size={18} className="text-[#D4FF00]" />
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 bg-[#0A0A0C] backdrop-blur-xl border border-[#D4FF00]/40 rounded-2xl px-5 py-3 flex items-center gap-4 shadow-[0_0_20px_rgba(212,255,0,0.3)] animate-slide-up">
+          <Timer size={18} className="text-[#D4FF00] drop-shadow-[0_0_6px_rgba(212,255,0,0.7)]" />
           <span className="text-white font-bold text-lg tabular-nums">{formatTime(restTimer.seconds)}</span>
-          <button
-            onClick={() => setRestTimer(prev => ({ ...prev, running: !prev.running }))}
-            className="p-1.5 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white transition-colors"
-          >
+          <button onClick={() => setRestTimer(prev => ({ ...prev, running: !prev.running }))} className="p-1.5 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white transition-colors">
             {restTimer.running ? <Pause size={16} /> : <Play size={16} />}
           </button>
-          <button
-            onClick={() => setRestTimer({ active: false, seconds: 90, running: false })}
-            className="text-xs text-zinc-500 hover:text-red-400 transition-colors font-medium"
-          >
+          <button onClick={() => setRestTimer({ active: false, seconds: 90, running: false })} className="text-xs text-zinc-500 hover:text-red-400 transition-colors font-medium">
             Omitir
           </button>
         </div>
       )}
 
-      {/* Header fijo */}
+      {/* Header */}
       <div className="flex justify-between items-center px-5 pt-5 pb-3 bg-[#09090B] z-10">
         <div>
-          <span className="text-[10px] bg-white/[0.04] border border-white/[0.05] px-2.5 py-1 rounded-lg text-zinc-400 uppercase tracking-wider font-medium">
+          <span className="text-[10px] bg-[#D4FF00]/10 border border-[#D4FF00]/30 px-2.5 py-1 rounded-lg text-[#D4FF00] uppercase tracking-wider font-medium">
             {activeRoutine.name}
           </span>
           <h2 className="text-xl font-bold text-white mt-1.5 tracking-tight">{dayName}</h2>
         </div>
         <button
           onClick={() => setShowExitConfirm(true)}
-          className="text-xs text-zinc-400 border border-white/[0.08] rounded-full px-4 py-2 active:scale-95 transition-all hover:bg-white/[0.03]"
+          className="text-xs text-zinc-400 border border-white/[0.1] rounded-full px-4 py-2 active:scale-95 transition-all hover:bg-white/[0.03] hover:border-[#D4FF00]/30"
         >
           Salir
         </button>
       </div>
 
-      {/* Volumen total fijo */}
+      {/* Volumen total */}
       <div className="px-5 mb-3">
-        <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl px-4 py-3 flex justify-between items-center text-sm">
+        <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3 flex justify-between items-center text-sm">
           <span className="text-zinc-400">Volumen total</span>
-          <span className="text-white font-bold tabular-nums">{totalVolume} kg</span>
+          <span className="text-[#D4FF00] font-bold tabular-nums drop-shadow-[0_0_6px_rgba(212,255,0,0.5)]">{totalVolume} kg</span>
         </div>
       </div>
 
@@ -198,61 +188,35 @@ export default function TrackerView({
           const isExpanded = expandedId === ex.id;
 
           return (
-            <div
-              key={ex.id}
-              ref={el => (exerciseRefs.current[ex.id] = el)}
-              className="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden transition-all"
-            >
-              <div
-                onClick={() => toggleExpand(ex.id)}
-                className="w-full p-4 text-left flex items-center justify-between active:scale-[0.99] transition-all cursor-pointer"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpand(ex.id); }}
-              >
+            <div key={ex.id} ref={el => (exerciseRefs.current[ex.id] = el)} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden transition-all hover:border-[#D4FF00]/40 hover:shadow-[0_0_20px_rgba(212,255,0,0.15)]">
+              <div onClick={() => toggleExpand(ex.id)} className="w-full p-4 text-left flex items-center justify-between active:scale-[0.99] transition-all cursor-pointer" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpand(ex.id); }}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="text-white font-semibold text-sm truncate">{ex.name}</h3>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const matched = libraryExercises.find(
-                          libEx => libEx.name.toLowerCase() === ex.name.toLowerCase()
-                        ) || libraryExercises.find(
-                          libEx => libEx.id === ex.libraryExerciseId
-                        );
-                        const enrichedExercise = matched ? { ...ex, ...matched } : ex;
-                        setDetailExercise(enrichedExercise);
-                      }}
-                      className="p-1 rounded-full text-zinc-500 hover:text-[#D4FF00] hover:bg-white/[0.05] transition-colors"
-                      title="Ver detalle del ejercicio"
-                    >
+                    <button onClick={(e) => { e.stopPropagation(); const matched = libraryExercises.find(libEx => libEx.name.toLowerCase() === ex.name.toLowerCase()) || libraryExercises.find(libEx => libEx.id === ex.libraryExerciseId); const enrichedExercise = matched ? { ...ex, ...matched } : ex; setDetailExercise(enrichedExercise); }} className="p-1 rounded-full text-zinc-500 hover:text-[#D4FF00] hover:bg-[#D4FF00]/10 transition-colors" title="Ver detalle del ejercicio">
                       <Info size={14} />
                     </button>
                     {completedSets === totalSets && totalSets > 0 && (
-                      <Check size={14} className="text-[#D4FF00] flex-shrink-0" />
+                      <Check size={14} className="text-[#D4FF00] flex-shrink-0 drop-shadow-[0_0_6px_rgba(212,255,0,0.7)]" />
                     )}
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-0.5">{ex.muscle || ''} · {totalSets} series</p>
                   {record && (
-                    <div className="flex items-center gap-1 mt-1 text-[10px] text-zinc-600">
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-zinc-400">
                       <Award size={10} className="text-[#D4FF00]" />
                       <span>PR: {record.weight} kg × {record.reps} reps</span>
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-zinc-500">{completedSets}/{totalSets}</span>
+                  <span className={`text-[10px] ${completedSets === totalSets ? 'text-[#D4FF00]' : 'text-zinc-500'}`}>{completedSets}/{totalSets}</span>
                   {isExpanded ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
                 </div>
               </div>
 
               <div className="px-4 pb-1">
                 <div className="w-full bg-white/[0.05] rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="h-full bg-[#D4FF00] rounded-full transition-all duration-500 ease-out shadow-[0_0_5px_rgba(212,255,0,0.3)]"
-                    style={{ width: `${progressPercent}%` }}
-                  />
+                  <div className="h-full bg-[#D4FF00] rounded-full transition-all duration-500 ease-out shadow-[0_0_12px_rgba(212,255,0,0.6)]" style={{ width: `${progressPercent}%` }} />
                 </div>
               </div>
 
@@ -261,25 +225,16 @@ export default function TrackerView({
                   <div className="grid grid-cols-5 text-center text-[10px] font-semibold text-zinc-500 mb-2 uppercase tracking-wider">
                     <div>Serie</div>
                     <div>Kg</div>
-                    <div>Reps sugeridas</div>
+                    <div>Reps objetivo</div>
                     <div>Reps realizadas</div>
                     <div>Listo</div>
                   </div>
                   <div className="space-y-2">
                     {ex.sets.map(set => {
-                      const lastSet = lastSession ? getLastSetData(lastSession, ex.id, set.setNum, ex.libraryExerciseId) : null;
-                      const globalSet = lastGlobalSets?.[exKey]?.sets?.[set.setNum - 1];
-                      const ghostWeight = lastSet?.weight || globalSet?.weight || '';
-                      const ghostReps = lastSet?.reps || globalSet?.reps || '';
-                      const suggestedReps = set.reps || '';
+                      const suggestionColor = set.suggestionAction === 'up' ? 'text-[#D4FF00]' : 'text-zinc-500';
 
                       return (
-                        <div
-                          key={set.id}
-                          className={`grid grid-cols-5 items-center text-center py-2 rounded-xl border transition-all ${
-                            set.done ? 'bg-[#D4FF00]/5 border-[#D4FF00]/20' : 'bg-white/[0.02] border-transparent'
-                          }`}
-                        >
+                        <div key={set.id} className={`grid grid-cols-5 items-center text-center py-2 rounded-xl border transition-all ${set.done ? 'bg-[#D4FF00]/10 border-[#D4FF00]/40 shadow-[0_0_15px_rgba(212,255,0,0.2)]' : 'bg-white/[0.02] border-transparent'}`}>
                           <span className={`text-xs font-bold ${set.done ? 'text-[#D4FF00]' : 'text-zinc-500'}`}>{set.setNum}</span>
                           <div className="flex flex-col items-center">
                             <input
@@ -288,14 +243,17 @@ export default function TrackerView({
                               value={set.weight}
                               disabled={set.done}
                               onChange={e => updateSetInput(ex.id, set.id, 'weight', e.target.value)}
-                              placeholder={ghostWeight}
-                              className="w-14 h-9 bg-white/[0.04] border border-white/[0.06] rounded-lg text-center text-sm py-1 text-white font-semibold focus:outline-none focus:border-[#D4FF00]/40 disabled:opacity-50 placeholder:text-zinc-600 transition-colors"
+                              className="w-14 h-9 bg-white/[0.04] border border-white/[0.1] rounded-lg text-center text-sm py-1 text-white font-semibold focus:outline-none focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.3)] disabled:opacity-50 transition-all"
                             />
-                            {ghostWeight && <span className="text-[10px] text-zinc-600 mt-0.5">Antes: {ghostWeight} kg</span>}
+                            {set.suggestionText && (
+                              <span className={`text-[10px] mt-0.5 ${suggestionColor}`}>
+                                {set.suggestionText}
+                              </span>
+                            )}
                           </div>
                           <div className="flex flex-col items-center">
-                            <span className="text-xs text-[#D4FF00]/70 font-mono">
-                              {suggestedReps || '—'}
+                            <span className="text-xs text-[#D4FF00]/80 font-mono">
+                              {set.reps || '—'}
                             </span>
                           </div>
                           <div className="flex flex-col items-center">
@@ -305,20 +263,11 @@ export default function TrackerView({
                               value={set.repsDone || ''}
                               disabled={set.done}
                               onChange={e => updateSetInput(ex.id, set.id, 'repsDone', e.target.value)}
-                              placeholder={ghostReps}
-                              className="w-14 h-9 bg-white/[0.04] border border-white/[0.06] rounded-lg text-center text-sm py-1 text-white font-semibold focus:outline-none focus:border-[#D4FF00]/40 disabled:opacity-50 placeholder:text-zinc-600 transition-colors"
+                              className="w-14 h-9 bg-white/[0.04] border border-white/[0.1] rounded-lg text-center text-sm py-1 text-white font-semibold focus:outline-none focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.3)] disabled:opacity-50 transition-all"
                             />
-                            {ghostReps && <span className="text-[10px] text-zinc-600 mt-0.5">Antes: {ghostReps}</span>}
                           </div>
                           <div className="flex justify-center">
-                            <button
-                              onClick={() => toggleSetDone(ex.id, set.id)}
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-90 ${
-                                set.done
-                                  ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_10px_rgba(212,255,0,0.3)]'
-                                  : 'bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-white'
-                              }`}
-                            >
+                            <button onClick={() => toggleSetDone(ex.id, set.id)} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-90 ${set.done ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_15px_rgba(212,255,0,0.6)]' : 'bg-white/[0.04] border border-white/[0.1] text-zinc-400 hover:text-white hover:border-[#D4FF00]/40'}`}>
                               <Check size={16} strokeWidth={3} />
                             </button>
                           </div>
@@ -333,17 +282,13 @@ export default function TrackerView({
         })}
       </div>
 
-      {/* Botón finalizar fijo */}
+      {/* Botón finalizar */}
       <div className="absolute bottom-0 left-0 right-0 bg-[#09090B]/95 backdrop-blur-md border-t border-white/[0.05] p-4 z-20" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 70px)' }}>
-        <button
-          onClick={handleFinish}
-          className="w-full bg-[#D4FF00] text-[#09090B] font-bold py-4 rounded-2xl text-sm transition-all active:scale-[0.98] shadow-lg shadow-[#D4FF00]/20 hover:bg-[#e5ff1a]"
-        >
+        <button onClick={handleFinish} className="w-full bg-[#D4FF00] text-[#09090B] font-bold py-4 rounded-2xl text-sm transition-all active:scale-[0.98] shadow-lg shadow-[#D4FF00]/25 hover:bg-[#e5ff1a] hover:shadow-[0_0_30px_rgba(212,255,0,0.5)]">
           Finalizar Entrenamiento
         </button>
       </div>
 
-      {/* Modal de confirmación al salir */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-[250] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
@@ -357,7 +302,6 @@ export default function TrackerView({
         </div>
       )}
 
-      {/* Modal de detalle del ejercicio */}
       {detailExercise && <ExerciseDetailModal exercise={detailExercise} onClose={() => setDetailExercise(null)} />}
 
       <style>{`

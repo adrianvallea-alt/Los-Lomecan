@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles, User, Heart } from 'lucide-react';
 
 // Fórmulas simplificadas (mismas que en EditProfileModal)
 const calculateBMR = (weight, height, age, gender) => {
@@ -72,7 +72,6 @@ export default function OnboardingWizard({ onComplete }) {
     });
   };
 
-  // Omite el wizard con valores predeterminados
   const handleSkip = () => {
     onComplete({
       weight: 70,
@@ -89,10 +88,10 @@ export default function OnboardingWizard({ onComplete }) {
   const renderStep0 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-3">
+        <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Calendar size={28} className="text-[#D4FF00]" />
         </div>
-        <h3 className="text-lg font-semibold text-white">Sexo y edad</h3>
+        <h3 className="text-lg font-bold text-white">Sexo y edad</h3>
         <p className="text-xs text-zinc-500 mt-1">Para calcular tu metabolismo basal</p>
       </div>
 
@@ -101,8 +100,8 @@ export default function OnboardingWizard({ onComplete }) {
           onClick={() => setGender('male')}
           className={`flex-1 py-4 rounded-2xl border font-medium transition-all duration-300 ${
             gender === 'male'
-              ? 'border-[#D4FF00]/40 bg-[#D4FF00]/5 text-white shadow-[0_0_20px_rgba(212,255,0,0.05)]'
-              : 'border-white/[0.06] text-zinc-500 hover:border-white/10 hover:text-zinc-300'
+              ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-[0_0_20px_rgba(212,255,0,0.15)]'
+              : 'border-white/[0.08] text-zinc-500 hover:border-[#D4FF00]/30 hover:bg-[#D4FF00]/5'
           }`}
         >
           🙋‍♂️ <span className="text-sm ml-1">Hombre</span>
@@ -111,8 +110,8 @@ export default function OnboardingWizard({ onComplete }) {
           onClick={() => setGender('female')}
           className={`flex-1 py-4 rounded-2xl border font-medium transition-all duration-300 ${
             gender === 'female'
-              ? 'border-[#D4FF00]/40 bg-[#D4FF00]/5 text-white shadow-[0_0_20px_rgba(212,255,0,0.05)]'
-              : 'border-white/[0.06] text-zinc-500 hover:border-white/10 hover:text-zinc-300'
+              ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-[0_0_20px_rgba(212,255,0,0.15)]'
+              : 'border-white/[0.08] text-zinc-500 hover:border-[#D4FF00]/30 hover:bg-[#D4FF00]/5'
           }`}
         >
           🙋‍♀️ <span className="text-sm ml-1">Mujer</span>
@@ -120,13 +119,13 @@ export default function OnboardingWizard({ onComplete }) {
       </div>
 
       <div>
-        <label className="text-[11px] text-zinc-500 ml-1 mb-1.5 block">Edad</label>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold">Edad</label>
         <input
           type="number"
           value={age}
           onChange={(e) => setAge(e.target.value)}
           placeholder="25"
-          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/40 focus:ring-1 focus:ring-[#D4FF00]/10 transition-all outline-none"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
         />
       </div>
     </div>
@@ -135,33 +134,33 @@ export default function OnboardingWizard({ onComplete }) {
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-3">
+        <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Ruler size={28} className="text-[#D4FF00]" />
         </div>
-        <h3 className="text-lg font-semibold text-white">Peso y altura</h3>
+        <h3 className="text-lg font-bold text-white">Peso y altura</h3>
         <p className="text-xs text-zinc-500 mt-1">Datos esenciales para tus metas</p>
       </div>
 
       <div>
-        <label className="text-[11px] text-zinc-500 ml-1 mb-1.5 block">Peso (kg)</label>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold">Peso (kg)</label>
         <input
           type="number"
           step="0.1"
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
           placeholder="70"
-          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/40 focus:ring-1 focus:ring-[#D4FF00]/10 transition-all outline-none"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
         />
       </div>
       <div>
-        <label className="text-[11px] text-zinc-500 ml-1 mb-1.5 block">Altura (cm)</label>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold">Altura (cm)</label>
         <input
           type="number"
           step="0.1"
           value={height}
           onChange={(e) => setHeight(e.target.value)}
           placeholder="170"
-          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/40 focus:ring-1 focus:ring-[#D4FF00]/10 transition-all outline-none"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
         />
       </div>
     </div>
@@ -170,10 +169,10 @@ export default function OnboardingWizard({ onComplete }) {
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-3">
+        <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Activity size={28} className="text-[#D4FF00]" />
         </div>
-        <h3 className="text-lg font-semibold text-white">Nivel de actividad</h3>
+        <h3 className="text-lg font-bold text-white">Nivel de actividad</h3>
         <p className="text-xs text-zinc-500 mt-1">¿Cuánto te mueves en el día?</p>
       </div>
 
@@ -190,8 +189,8 @@ export default function OnboardingWizard({ onComplete }) {
             onClick={() => setActivityLevel(opt.value)}
             className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 ${
               activityLevel === opt.value
-                ? 'border-[#D4FF00]/40 bg-[#D4FF00]/5 text-white shadow-[0_0_20px_rgba(212,255,0,0.05)]'
-                : 'border-white/[0.05] text-zinc-400 hover:border-white/10 hover:text-zinc-200 hover:bg-white/[0.02]'
+                ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-[0_0_20px_rgba(212,255,0,0.15)]'
+                : 'border-white/[0.08] text-zinc-400 hover:border-[#D4FF00]/30 hover:bg-[#D4FF00]/5 hover:text-zinc-200'
             }`}
           >
             <span className="text-sm font-medium">{opt.label}</span>
@@ -204,10 +203,10 @@ export default function OnboardingWizard({ onComplete }) {
   const renderStep3 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-3">
+        <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Target size={28} className="text-[#D4FF00]" />
         </div>
-        <h3 className="text-lg font-semibold text-white">Objetivo</h3>
+        <h3 className="text-lg font-bold text-white">Objetivo</h3>
         <p className="text-xs text-zinc-500 mt-1">¿Qué quieres lograr?</p>
       </div>
 
@@ -222,8 +221,8 @@ export default function OnboardingWizard({ onComplete }) {
             onClick={() => setGoalType(opt.value)}
             className={`w-full text-left p-4 rounded-2xl border transition-all duration-300 flex items-center gap-4 ${
               goalType === opt.value
-                ? 'border-[#D4FF00]/40 bg-[#D4FF00]/5 text-white shadow-[0_0_20px_rgba(212,255,0,0.05)]'
-                : 'border-white/[0.05] text-zinc-400 hover:border-white/10 hover:text-zinc-200 hover:bg-white/[0.02]'
+                ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-[0_0_20px_rgba(212,255,0,0.15)]'
+                : 'border-white/[0.08] text-zinc-400 hover:border-[#D4FF00]/30 hover:bg-[#D4FF00]/5 hover:text-zinc-200'
             }`}
           >
             <span className="text-2xl">{opt.icon}</span>
@@ -246,29 +245,31 @@ export default function OnboardingWizard({ onComplete }) {
 
   return (
     <div className="min-h-screen bg-[#09090B] flex flex-col justify-center px-5 safe-top safe-bottom relative overflow-hidden">
-      {/* Fondo ambiental */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-[#D4FF00]/[0.015] rounded-full blur-[100px] pointer-events-none" />
+      {/* Fondo ambiental neón */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-[#D4FF00]/[0.03] rounded-full blur-[120px]" />
+      </div>
 
       <div className="w-full max-w-md mx-auto text-center relative z-10">
         {/* Encabezado */}
         <div className="mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] shadow-lg mb-5">
-            <Sparkles size={28} className="text-[#D4FF00]" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-[#D4FF00]/10 border border-[#D4FF00]/30 shadow-[0_0_30px_rgba(212,255,0,0.2)] mb-5">
+            <Sparkles size={32} className="text-[#D4FF00]" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Configura tu perfil</h1>
-          <p className="text-xs text-zinc-500 mt-2 max-w-[250px] mx-auto leading-relaxed">
+          <h1 className="text-2xl font-black text-white tracking-tight">Configura tu perfil</h1>
+          <p className="text-sm text-zinc-400 mt-2 max-w-[260px] mx-auto leading-relaxed">
             Esto nos ayudará a personalizar tus metas
           </p>
         </div>
 
-        {/* Indicador de paso mejorado */}
+        {/* Indicador de paso */}
         <div className="flex justify-center items-center gap-2 mb-8">
           {STEPS.map((_, idx) => (
             <div
               key={idx}
               className={`transition-all duration-500 ease-out-expo ${
                 idx === step
-                  ? 'w-8 h-2 bg-[#D4FF00] rounded-full shadow-[0_0_10px_rgba(212,255,0,0.4)]'
+                  ? 'w-8 h-2 bg-[#D4FF00] rounded-full shadow-[0_0_12px_rgba(212,255,0,0.6)]'
                   : idx < step
                   ? 'w-2 h-2 bg-[#D4FF00]/60 rounded-full'
                   : 'w-2 h-2 bg-white/10 rounded-full'
@@ -278,7 +279,7 @@ export default function OnboardingWizard({ onComplete }) {
         </div>
 
         {/* Contenedor del paso actual */}
-        <div className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-[2.5rem] p-6 shadow-2xl shadow-black/20 mb-6 transition-all duration-500 ease-out-expo">
+        <div className="bg-gradient-to-br from-white/[0.05] to-transparent border border-[#D4FF00]/20 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-[0_0_30px_rgba(212,255,0,0.1)] mb-6 transition-all duration-500 ease-out-expo">
           <div className="animate-fade-in-up" key={step}>
             {renderContent()}
           </div>
@@ -289,7 +290,7 @@ export default function OnboardingWizard({ onComplete }) {
           {step > 0 && (
             <button
               onClick={prevStep}
-              className="flex-1 py-3.5 border border-white/[0.08] rounded-2xl text-zinc-400 text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-white/[0.03] hover:text-white active:scale-[0.98] transition-all"
+              className="flex-1 py-3.5 border border-white/[0.1] rounded-2xl text-zinc-400 text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-white/[0.05] hover:text-white hover:border-[#D4FF00]/30 active:scale-[0.98] transition-all"
             >
               <ChevronLeft size={16} />
               Atrás
@@ -301,7 +302,7 @@ export default function OnboardingWizard({ onComplete }) {
               (step === 0 && !age) ||
               (step === 1 && (!weight || !height))
             }
-            className="flex-1 py-3.5 bg-[#D4FF00] text-[#09090B] font-bold rounded-2xl text-sm flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none hover:bg-[#e5ff1a] active:scale-[0.98] transition-all shadow-lg shadow-[#D4FF00]/10"
+            className="flex-1 py-3.5 bg-[#D4FF00] text-[#09090B] font-bold rounded-2xl text-sm flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none hover:bg-[#e5ff1a] hover:shadow-[0_0_20px_rgba(212,255,0,0.4)] active:scale-[0.98] transition-all shadow-lg shadow-[#D4FF00]/20"
           >
             {step === totalSteps - 1 ? (
               <>
@@ -317,7 +318,7 @@ export default function OnboardingWizard({ onComplete }) {
           </button>
         </div>
 
-        {/* Botón para omitir y configurar más tarde */}
+        {/* Botón para omitir */}
         <button
           onClick={handleSkip}
           className="mt-5 text-xs text-zinc-500 hover:text-white transition-colors"

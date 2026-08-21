@@ -375,7 +375,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pt-4 flex flex-col overscroll-none touch-pan-y">
+        <div className="flex-1 overflow-y-auto pt-4 flex flex-col overscroll-none touch-pan-y no-scrollbar">
           {renderContent()}
         </div>
 

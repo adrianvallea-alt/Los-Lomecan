@@ -258,7 +258,6 @@ export default function FoodCatalog({ onAddToDay }) {
       const finalFood = data || newFood;
       setFoods(prev => [finalFood, ...prev]);
       handleSelectFood(finalFood);
-      // Actualizar caché
       const cached = localStorage.getItem('foodsCache');
       if (cached) {
         const arr = JSON.parse(cached);
@@ -277,28 +276,33 @@ export default function FoodCatalog({ onAddToDay }) {
 
   // ========== RENDERIZADO ==========
   return (
-    <div className="flex-1 flex flex-col relative overflow-y-auto pb-32">
+    <div className="flex-1 flex flex-col relative overflow-y-auto pb-32 no-scrollbar">
       {/* Luces de fondo estilizadas */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-pastel-blue/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-32 h-32 bg-pastel-green/5 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4FF00]/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#D4FF00]/5 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
 
       <div className="relative z-10 p-4 space-y-5">
         {/* Cabecera */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles size={20} className="text-[#d4ff00]" />
-            <h2 className="text-xl font-bold text-white">Alimentos</h2>
+            <Sparkles size={20} className="text-[#D4FF00] drop-shadow-[0_0_6px_rgba(212,255,0,0.6)]" />
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              Alimentos
+              <span className="inline-block w-2 h-2 rounded-full bg-[#D4FF00] shadow-[0_0_8px_rgba(212,255,0,0.8)]" />
+            </h2>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setEditingFood(null); setShowCustomForm(true); }}
-              className="p-2.5 rounded-full bg-stone-900 border border-white/10 text-stone-400 hover:text-white active:scale-90 transition-transform"
+              className="p-2.5 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00]/20 hover:shadow-[0_0_15px_rgba(212,255,0,0.3)] active:scale-90 transition-all"
+              aria-label="Nuevo alimento"
             >
               <Plus size={18} />
             </button>
             <button
               onClick={() => setShowScanner(true)}
-              className="p-2.5 rounded-full bg-stone-900 border border-white/10 text-stone-400 hover:text-white active:scale-90 transition-transform"
+              className="p-2.5 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00]/20 hover:shadow-[0_0_15px_rgba(212,255,0,0.3)] active:scale-90 transition-all"
+              aria-label="Escanear código de barras"
             >
               <Barcode size={18} />
             </button>
@@ -313,7 +317,7 @@ export default function FoodCatalog({ onAddToDay }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar alimento o marca..."
-            className="w-full bg-stone-900/60 backdrop-blur-md border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white focus:border-[#d4ff00] focus:ring-1 focus:ring-[#d4ff00] outline-none transition-all shadow-md"
+            className="w-full bg-stone-900/60 backdrop-blur-md border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-stone-500 focus:border-[#D4FF00]/50 focus:ring-1 focus:ring-[#D4FF00]/50 focus:shadow-[0_0_12px_rgba(212,255,0,0.2)] outline-none transition-all shadow-md"
           />
         </div>
 
@@ -336,8 +340,8 @@ export default function FoodCatalog({ onAddToDay }) {
                 <div
                   className={`w-full bg-stone-900/40 backdrop-blur-md border rounded-2xl p-4 flex items-center justify-between gap-4 transition-all ${
                     selectedFood?.id === food.id || selectedFood?.barcode === food.barcode
-                      ? 'border-[#d4ff00] bg-[#d4ff00]/5 shadow-md shadow-[#d4ff00]/5'
-                      : 'border-white/[0.06]'
+                      ? 'border-[#D4FF00]/60 bg-[#D4FF00]/5 shadow-[0_0_15px_rgba(212,255,0,0.2)]'
+                      : 'border-white/[0.06] hover:border-[#D4FF00]/30 hover:shadow-[0_0_10px_rgba(212,255,0,0.1)]'
                   }`}
                 >
                   <button
@@ -361,7 +365,7 @@ export default function FoodCatalog({ onAddToDay }) {
                         e.stopPropagation();
                         handleEditFood(food);
                       }}
-                      className="p-2.5 rounded-xl bg-stone-950 border border-white/10 text-stone-400 hover:text-white hover:border-white/20 active:scale-95 transition-all shadow-lg flex items-center justify-center"
+                      className="p-2.5 rounded-xl bg-stone-950 border border-white/10 text-stone-400 hover:text-[#D4FF00] hover:border-[#D4FF00]/40 hover:shadow-[0_0_10px_rgba(212,255,0,0.2)] active:scale-95 transition-all flex items-center justify-center"
                       aria-label="Editar alimento"
                     >
                       <Edit3 size={14} />
@@ -374,12 +378,13 @@ export default function FoodCatalog({ onAddToDay }) {
         </div>
       </div>
 
-      {/* ========== MODAL NUEVO/EDITAR ALIMENTO (CORREGIDO) ========== */}
+      {/* ========== MODAL NUEVO/EDITAR ALIMENTO ========== */}
       {showCustomForm && (
         <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-md bg-stone-900 border border-white/10 rounded-3xl p-5 space-y-4 shadow-2xl max-h-[95vh] overflow-y-auto overflow-x-hidden">
-            <h3 className="text-white font-black text-base uppercase tracking-wider font-mono">
+          <div className="w-full max-w-md bg-stone-900 border border-[#D4FF00]/20 rounded-3xl p-5 space-y-4 shadow-2xl shadow-[#D4FF00]/5 max-h-[95vh] overflow-y-auto overflow-x-hidden">
+            <h3 className="text-white font-black text-base uppercase tracking-wider font-mono flex items-center gap-2">
               {editingFood ? '⚙️ Editar Alimento' : '✨ Nuevo Alimento (Base 100g)'}
+              <span className="inline-block w-2 h-2 rounded-full bg-[#D4FF00] shadow-[0_0_8px_rgba(212,255,0,0.6)]" />
             </h3>
 
             <div className="space-y-3">
@@ -388,14 +393,14 @@ export default function FoodCatalog({ onAddToDay }) {
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder="Nombre del alimento"
-                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
               />
               <input
                 type="text"
                 value={customBrand}
                 onChange={(e) => setCustomBrand(e.target.value)}
                 placeholder="Marca (opcional)"
-                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
               />
 
               <div className="grid grid-cols-2 gap-3">
@@ -407,7 +412,7 @@ export default function FoodCatalog({ onAddToDay }) {
                     inputMode="decimal"
                     value={customPro}
                     onChange={(e) => setCustomPro(e.target.value)}
-                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
                   />
                 </div>
                 <div className="min-w-0">
@@ -418,7 +423,7 @@ export default function FoodCatalog({ onAddToDay }) {
                     inputMode="decimal"
                     value={customCarb}
                     onChange={(e) => setCustomCarb(e.target.value)}
-                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
                   />
                 </div>
                 <div className="min-w-0">
@@ -429,7 +434,7 @@ export default function FoodCatalog({ onAddToDay }) {
                     inputMode="decimal"
                     value={customFat}
                     onChange={(e) => setCustomFat(e.target.value)}
-                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
                   />
                 </div>
                 <div className="min-w-0">
@@ -440,12 +445,12 @@ export default function FoodCatalog({ onAddToDay }) {
                       inputMode="decimal"
                       value={customCal}
                       onChange={(e) => setCustomCal(e.target.value)}
-                      className="flex-1 min-w-0 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                      className="flex-1 min-w-0 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#D4FF00]/50 focus:shadow-[0_0_10px_rgba(212,255,0,0.2)] outline-none transition-all"
                     />
                     <button
                       type="button"
                       onClick={calculateCaloriesFromMacros}
-                      className="px-3 bg-stone-950 border border-white/10 text-[#d4ff00] rounded-xl hover:bg-[#d4ff00]/10 transition-colors flex items-center justify-center"
+                      className="px-3 bg-stone-950 border border-[#D4FF00]/30 text-[#D4FF00] rounded-xl hover:bg-[#D4FF00]/10 hover:shadow-[0_0_10px_rgba(212,255,0,0.2)] transition-all flex items-center justify-center"
                       title="Forzar auto-cálculo"
                     >
                       <Calculator size={16} />
@@ -456,7 +461,7 @@ export default function FoodCatalog({ onAddToDay }) {
             </div>
 
             {customBarcode && (
-              <div className="text-[9px] font-mono text-stone-500 text-center bg-stone-950 p-2 rounded-lg border border-white/[0.02]">
+              <div className="text-[9px] font-mono text-stone-500 text-center bg-stone-950 p-2 rounded-lg border border-[#D4FF00]/20">
                 EAN/CÓDIGO: {customBarcode}
               </div>
             )}
@@ -464,13 +469,13 @@ export default function FoodCatalog({ onAddToDay }) {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleSaveCustomFood}
-                className="flex-1 bg-[#d4ff00] text-stone-950 font-black py-3 rounded-xl flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-95 transition-all uppercase tracking-wider text-xs"
+                className="flex-1 bg-[#D4FF00] text-stone-950 font-black py-3 rounded-xl flex items-center justify-center gap-1.5 hover:bg-[#C4E600] hover:shadow-[0_0_15px_rgba(212,255,0,0.4)] active:scale-95 transition-all uppercase tracking-wider text-xs shadow-md shadow-[#D4FF00]/20"
               >
                 <Save size={14} /> {editingFood ? 'Actualizar' : 'Guardar'}
               </button>
               <button
                 onClick={clearCustomForm}
-                className="px-5 py-3 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider text-stone-400 hover:text-white transition-colors"
+                className="px-5 py-3 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider text-stone-400 hover:text-white hover:border-[#D4FF00]/40 transition-colors"
               >
                 Cancelar
               </button>

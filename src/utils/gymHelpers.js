@@ -14,6 +14,7 @@ export const getCurrentYear = () => {
 export const generateId = () => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
+
 export const getLastSetData = (lastSession, exerciseId, setNum, libraryExerciseId) => {
   if (!lastSession) return null;
   const ex = lastSession.exercises.find(e =>
@@ -57,6 +58,42 @@ export const getDayRecords = (sessionsSameDay) => {
 };
 
 export const limitHistory = (historyArray, max = 30) => historyArray.slice(-max);
+
+// ========== PROGRESIÓN INTELIGENTE ==========
+export const getProgressionSuggestion = (lastSets, goalReps, defaultWeight = '') => {
+  if (!lastSets || lastSets.length === 0) {
+    return {
+      weight: defaultWeight,
+      action: 'no-data',
+      text: 'Sin referencia'
+    };
+  }
+
+  const lastWeight = parseFloat(lastSets[0]?.weight) || 0;
+  const lastReps = parseInt(lastSets[0]?.reps) || 0;
+  const goal = parseInt(goalReps) || 0;
+
+  if (lastWeight > 0 && goal > 0 && lastReps >= goal) {
+    const newWeight = (lastWeight + 2.5).toFixed(1);
+    return {
+      weight: newWeight,
+      action: 'up',
+      text: `Subir a ${newWeight} kg`
+    };
+  } else if (lastWeight > 0) {
+    return {
+      weight: lastWeight.toString(),
+      action: 'maintain',
+      text: `Mantener ${lastWeight} kg`
+    };
+  } else {
+    return {
+      weight: defaultWeight,
+      action: 'no-data',
+      text: 'Sin referencia'
+    };
+  }
+};
 
 export const getSuggestedWeight = (lastSets, defaultWeight) => {
   if (!lastSets || lastSets.length === 0) return defaultWeight || '';
