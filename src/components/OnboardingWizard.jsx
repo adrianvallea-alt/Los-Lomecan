@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles, User, Heart } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles, Droplet } from 'lucide-react';
 
-// Fórmulas simplificadas (mismas que en EditProfileModal)
+// ==================== FÓRMULAS AVANZADAS (mismas que EditProfileModal) ====================
 const calculateBMR = (weight, height, age, gender) => {
   if (!weight || !height || !age) return 0;
   return gender === 'female'
@@ -10,23 +10,57 @@ const calculateBMR = (weight, height, age, gender) => {
 };
 
 const getActivityFactor = (level) => {
-  const factors = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
+  const factors = {
+    sedentary: 1.2,
+    light: 1.375,
+    moderate: 1.55,
+    active: 1.725,
+    very_active: 1.9,
+  };
   return factors[level] || 1.55;
 };
 
 const calculateTDEE = (bmr, activityLevel) => Math.round(bmr * getActivityFactor(activityLevel));
 
-const calculateGoals = (tdee, goalType) => {
+const calculateGoals = (tdee, weight, goalType) => {
+  // 1. Ajuste de calorías según objetivo (porcentaje del TDEE)
   let targetCalories = tdee;
-  if (goalType === 'lose') targetCalories = tdee - 500;
-  else if (goalType === 'gain') targetCalories = tdee + 500;
+  if (goalType === 'lose') {
+    const deficit = Math.min(Math.max(tdee * 0.20, 300), 800);
+    targetCalories = tdee - deficit;
+  } else if (goalType === 'gain') {
+    const surplus = Math.min(Math.max(tdee * 0.10, 200), 600);
+    targetCalories = tdee + surplus;
+  }
 
-  const protein = Math.round((targetCalories * 0.25) / 4);
-  const fat = Math.round((targetCalories * 0.3) / 9);
-  const carbs = Math.round((targetCalories - protein * 4 - fat * 9) / 4);
+  // 2. Proteínas según objetivo y peso corporal (g/kg)
+  let proteinPerKg = 1.8; // mantenimiento
+  if (goalType === 'lose') proteinPerKg = 2.2;
+  else if (goalType === 'gain') proteinPerKg = 2.0;
 
-  return { cal: targetCalories, pro: protein, carb: Math.max(carbs, 0), fat };
+  const protein = Math.round(proteinPerKg * weight);
+
+  // 3. Grasas según peso corporal (g/kg) y objetivo
+  let fatPerKg = 0.8; // estándar
+  if (goalType === 'lose') fatPerKg = 0.6;
+
+  const fat = Math.round(Math.max(fatPerKg * weight, 0.5 * weight));
+
+  // 4. Carbohidratos restantes
+  const proteinCalories = protein * 4;
+  const fatCalories = fat * 9;
+  const carbCalories = Math.max(targetCalories - proteinCalories - fatCalories, 0);
+  const carbs = Math.round(carbCalories / 4);
+
+  return {
+    cal: Math.round(targetCalories),
+    pro: protein,
+    carb: Math.max(carbs, 0),
+    fat: fat,
+  };
 };
+
+const calculateWaterGoal = (weight) => Math.round(weight * 35);
 
 const STEPS = [
   { title: 'Sexo y edad', icon: Calendar },
@@ -58,7 +92,8 @@ export default function OnboardingWizard({ onComplete }) {
   const handleFinish = () => {
     const bmr = calculateBMR(parseFloat(weight), parseFloat(height), parseInt(age), gender);
     const tdee = calculateTDEE(bmr, activityLevel);
-    const goals = calculateGoals(tdee, goalType);
+    const goals = calculateGoals(tdee, parseFloat(weight), goalType);
+    const waterGoal = calculateWaterGoal(parseFloat(weight));
 
     onComplete({
       weight: parseFloat(weight),
@@ -68,6 +103,7 @@ export default function OnboardingWizard({ onComplete }) {
       activity_level: activityLevel,
       goal_type: goalType,
       goals,
+      water_goal: waterGoal, // ✅ Añadido
       auto_calculate_macros: true,
     });
   };
@@ -81,10 +117,12 @@ export default function OnboardingWizard({ onComplete }) {
       activity_level: 'moderate',
       goal_type: 'maintain',
       goals: { cal: 2500, pro: 150, carb: 250, fat: 65 },
+      water_goal: 2450, // ✅ 70 kg * 35 ml
       auto_calculate_macros: true,
     });
   };
 
+  // Render de pasos (mismo que ya tenías con estilo neón)
   const renderStep0 = () => (
     <div className="space-y-6">
       <div className="text-center">
