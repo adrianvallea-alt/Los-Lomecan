@@ -1,17 +1,23 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Edit3, Trash2 } from 'lucide-react';
 import {
-  getCurrentMonth, getCurrentYear,
   updatePersonalRecords, getDayRecords, limitHistory,
   getSuggestedWeight, getSuggestedReps
 } from '../utils/gymHelpers';
-import { fetchWorkoutHistory, saveUserRoutine, deleteUserRoutine, saveWorkoutSession, fetchAllGlobalRoutines, importRoutineToProfile } from '../lib/dataService';
-import { supabase } from '../lib/supabaseClient';
+import { 
+  fetchWorkoutHistory, 
+  fetchUserRoutines,
+  saveUserRoutine, 
+  deleteUserRoutine, 
+  saveWorkoutSession, 
+  fetchAllGlobalRoutines, 
+  importRoutineToProfile 
+} from '../lib/dataService';
 
 import RoutineHome from './gym/RoutineHome';
 import DaySelector from './gym/DaySelector';
-import LibraryView from './gym/LibraryView';
 import LibraryAuth from './gym/LibraryAuth';
+import LibraryView from './gym/LibraryView'; // ✅ Añadido
 import RoutineCreator from './gym/RoutineCreator';
 import TrackerView from './gym/TrackerView';
 import FinishedView from './gym/FinishedView';
@@ -52,18 +58,25 @@ export default function GymTracker({
   const [completedDaysMap, setCompletedDaysMap] = useState({});
   const [toastMessage, setToastMessage] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [globalRoutinesVersion, setGlobalRoutinesVersion] = useState(0);
 
-  const libraryCache = useRef(null);
   const navigate = useCallback((nextView) => {
     setPreviousView(view);
     setView(nextView);
   }, [view]);
 
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-  const currentRoutine = routines.find(r => r.month === currentMonth && r.year === currentYear);
+  // La rutina activa es la que tiene is_active === true
+  const currentRoutine = routines.find(r => r.is_active === true);
+  const isAdmin = activeProfile?.id === 'adrian'; // Ajusta según tu lógica
 
-  // ========== CARGAR RUTINAS GLOBALES PARA IMPORTAR ==========
+  // ✅ Abrir biblioteca de ejercicios al pulsar el candado
+  useEffect(() => {
+    if (openLibrary) {
+      setView('exerciseLibrary');
+      if (onLibraryOpened) onLibraryOpened();
+    }
+  }, [openLibrary, onLibraryOpened]);
+
   const getAllGlobalRoutines = useCallback(async () => {
     try {
       const globalRoutines = await fetchAllGlobalRoutines();
@@ -74,52 +87,43 @@ export default function GymTracker({
     }
   }, []);
 
-  // ========== CONVERTIR UNA PLANTILLA EN RUTINA ACTIVA ==========
-  const handleSetActiveRoutine = async (template) => {
-    const newActiveRoutine = {
-      ...template,
-      id: 'r_' + Date.now(),
-      month: currentMonth,
-      year: currentYear,
-    };
+  const handleSetActiveRoutine = async (routineToActivate) => {
+    const previousActive = routines.find(r => r.id !== routineToActivate.id && r.is_active === true);
 
-    const updatedRoutines = [...routines, newActiveRoutine];
+    const updatedRoutines = routines.map(r => ({
+      ...r,
+      is_active: r.id === routineToActivate.id ? true : false
+    }));
+
     onUpdateRoutines(updatedRoutines);
-    setToastMessage(`✅ "${newActiveRoutine.name}" establecida como rutina activa`);
+    setToastMessage(`✅ "${routineToActivate.name}" ahora está En curso`);
     setTimeout(() => setToastMessage(null), 2500);
 
     try {
-      await saveUserRoutine(activeProfile.id, newActiveRoutine);
+      if (previousActive) {
+        await saveUserRoutine(activeProfile.id, { ...previousActive, is_active: false });
+      }
+      const newActive = updatedRoutines.find(r => r.id === routineToActivate.id);
+      if (newActive) {
+        await saveUserRoutine(activeProfile.id, newActive);
+      }
     } catch (e) {
-      addToQueue('saveRoutine', newActiveRoutine);
+      if (previousActive) addToQueue('saveRoutine', { ...previousActive, is_active: false });
+      if (newActive) addToQueue('saveRoutine', newActive);
     }
     navigate('home');
   };
 
-  // ========== IMPORTAR RUTINA ==========
-  const addRoutineToProfile = async (routineId) => {
+  // Importa una rutina global creando una copia local
+  const handleImportGlobal = async (globalRoutineId) => {
     if (!activeProfile) return;
     try {
-      await importRoutineToProfile(activeProfile.id, routineId);
-      const { data: routineData, error } = await supabase
-        .from('routines').select('*').eq('id', routineId).single();
-      if (error) throw error;
-
-      if (routineData) {
-        const importedRoutine = {
-          id: routineData.id,
-          name: routineData.name,
-          month: routineData.month,
-          year: routineData.year,
-          trainingDays: routineData.training_days || [],
-          createdBy: routineData.created_by,
-        };
-        const updatedRoutines = [...routines, importedRoutine];
-        onUpdateRoutines(updatedRoutines);
-        setToastMessage(`✅ Rutina "${importedRoutine.name}" importada`);
-        setTimeout(() => setToastMessage(null), 2500);
-        setShowImportModal(false);
-      }
+      await importRoutineToProfile(activeProfile.id, globalRoutineId);
+      const freshRoutines = await fetchUserRoutines(activeProfile.id);
+      onUpdateRoutines(freshRoutines);
+      setToastMessage('✅ Rutina importada correctamente');
+      setTimeout(() => setToastMessage(null), 2500);
+      setShowImportModal(false);
     } catch (err) {
       console.error('Error importando rutina:', err);
       setToastMessage('❌ Error al importar la rutina');
@@ -127,7 +131,27 @@ export default function GymTracker({
     }
   };
 
-  // ========== RESTO DE FUNCIONES (ENTRENAMIENTO) ==========
+  const handleDeleteGlobalRoutine = async (routineId) => {
+    if (!isAdmin) return;
+    if (window.confirm('¿Eliminar esta rutina global? Las copias locales existentes se mantendrán.')) {
+      try {
+        await deleteUserRoutine(activeProfile.id, routineId, true);
+        setToastMessage('🗑️ Rutina global eliminada');
+        setTimeout(() => setToastMessage(null), 2500);
+        setGlobalRoutinesVersion(prev => prev + 1);
+      } catch (err) {
+        console.error('Error eliminando global:', err);
+        setToastMessage('❌ Error al eliminar');
+        setTimeout(() => setToastMessage(null), 2500);
+      }
+    }
+  };
+
+  const handleEditGlobalRoutine = (routine) => {
+    setEditingRoutine({ ...routine, is_global: true });
+    navigate('create');
+  };
+
   const loadAllHistory = useCallback(async () => {
     if (!activeProfile) return;
     const allSessions = [];
@@ -184,6 +208,12 @@ export default function GymTracker({
     const trainingDay = routine.trainingDays[dayIndex];
     if (!trainingDay) return;
 
+    // ✅ Validación para evitar error si no hay ejercicios
+    if (!trainingDay.exercises || trainingDay.exercises.length === 0) {
+      alert('Esta rutina no tiene ejercicios configurados para este día.');
+      return;
+    }
+
     const exercisesClone = trainingDay.exercises.map(ex => {
       const exKey = ex.libraryExerciseId || ex.id;
       const lastSets = lastGlobalSets[exKey]?.sets || [];
@@ -207,14 +237,24 @@ export default function GymTracker({
     navigate('tracker');
   };
 
-  const handleEditRoutine = (routine) => { setEditingRoutine(routine); navigate('create'); };
+  const handleEditRoutine = (routine) => {
+    setEditingRoutine(routine);
+    navigate('create');
+  };
 
   const handleDeleteRoutine = async (routineId) => {
-    if (window.confirm('¿Eliminar esta rutina?')) {
+    if (window.confirm('¿Eliminar esta rutina de tu lista?')) {
       const updated = routines.filter(r => r.id !== routineId);
       onUpdateRoutines(updated);
-      try { await deleteUserRoutine(activeProfile.id, routineId); } catch (e) { console.error(e); }
-      if (currentRoutine?.id === routineId) { setActiveRoutine(null); setRoutineData(null); }
+      try { 
+        await deleteUserRoutine(activeProfile.id, routineId, false); // local
+      } catch (e) { 
+        console.error(e); 
+      }
+      if (currentRoutine?.id === routineId) { 
+        setActiveRoutine(null); 
+        setRoutineData(null); 
+      }
       loadAllHistory();
     }
   };
@@ -236,13 +276,6 @@ export default function GymTracker({
     }
   };
 
-  const handleSetPassword = (pass) => {
-    localStorage.setItem('libraryPassword', pass);
-    setLibraryPassword(pass);
-    navigate('library');
-  };
-
-  // ========== RENDERIZADO DE VISTAS ==========
   const renderView = () => {
     switch (view) {
       case 'home':
@@ -251,7 +284,7 @@ export default function GymTracker({
             currentRoutine={currentRoutine}
             onStartWorkout={handleSelectRoutine}
             onManageTemplates={() => navigate('library')}
-            onDeleteRoutine={handleDeleteRoutine} // ✅ CORREGIDO: Se agregó esta línea
+            onDeleteRoutine={handleDeleteRoutine}
           />
         );
       case 'daySelector':
@@ -269,7 +302,7 @@ export default function GymTracker({
         return (
           <div className="flex flex-col h-full bg-[#0A0A0C] p-4 relative">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-white tracking-tight">Mis Plantillas</h2>
+              <h2 className="text-xl font-bold text-white tracking-tight">Mis Rutinas</h2>
               <button onClick={() => navigate('home')} className="p-2.5 rounded-full bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white transition-colors">
                 <X size={18} />
               </button>
@@ -309,11 +342,22 @@ export default function GymTracker({
                    Importar rutina global
                  </button>
                  <button onClick={() => { setEditingRoutine(null); navigate('create'); }} className="w-full py-4 border border-dashed border-white/[0.08] rounded-2xl text-sm text-zinc-400 hover:border-[#D4FF00]/30 hover:text-[#D4FF00] flex items-center justify-center gap-2 font-medium">
-                   <Plus size={16} /> Nueva plantilla
+                   <Plus size={16} /> Nueva rutina
                  </button>
               </div>
             </div>
           </div>
+        );
+      case 'exerciseLibrary':
+        return (
+          <LibraryView
+            password={libraryPassword}
+            onSetPassword={(newPass) => {
+              setLibraryPassword(newPass);
+              localStorage.setItem('libraryPassword', newPass);
+            }}
+            onBack={() => navigate('home')}
+          />
         );
       case 'libraryAuth':
         return <LibraryAuth password={libraryPassword} onCorrectPassword={() => navigate('library')} onBack={() => navigate(previousView)} />;
@@ -322,11 +366,38 @@ export default function GymTracker({
           <RoutineCreator
             initialData={editingRoutine}
             onSave={async (routineData) => {
-              let updated;
-              if (editingRoutine) updated = routines.map(r => r.id === routineData.id ? routineData : r);
-              else updated = [...routines, routineData];
-              onUpdateRoutines(updated);
-              try { await saveUserRoutine(activeProfile.id, routineData); } catch (e) { addToQueue('saveRoutine', routineData); }
+              // ✅ Nueva lógica: guardar global y auto-importar
+              const isGlobal = editingRoutine?.is_global ?? true;
+              const routineId = crypto.randomUUID(); // Usar UUID válido
+              const routineToSave = {
+                ...routineData,
+                id: routineId,
+                is_global: isGlobal,
+                parent_routine_id: editingRoutine?.parent_routine_id ?? null,
+                is_active: editingRoutine?.is_active ?? false,
+              };
+
+              try {
+                await saveUserRoutine(activeProfile.id, routineToSave);
+
+                // Si es una rutina global nueva (no edición), la importamos automáticamente
+                if (isGlobal && !editingRoutine) {
+                  await importRoutineToProfile(activeProfile.id, routineId);
+                }
+
+                // Recargar las rutinas locales del usuario
+                const freshRoutines = await fetchUserRoutines(activeProfile.id);
+                onUpdateRoutines(freshRoutines);
+
+                setToastMessage(isGlobal ? '✅ Rutina creada y añadida a Mis rutinas' : '✅ Rutina guardada');
+                setTimeout(() => setToastMessage(null), 2500);
+              } catch (e) {
+                console.error('Error guardando rutina:', e);
+                setToastMessage('❌ Error al guardar la rutina');
+                setTimeout(() => setToastMessage(null), 2500);
+                addToQueue('saveRoutine', routineToSave);
+              }
+
               setEditingRoutine(null);
               navigate('library');
             }}
@@ -354,24 +425,7 @@ export default function GymTracker({
               try { await saveWorkoutSession(activeProfile.id, session); } catch (e) { addToQueue('saveWorkoutSession', session); }
 
               await loadAllHistory();
-              const oldRecords = { ...personalRecords };
-              const newRecords = updatePersonalRecords(personalRecords, session);
-              const brokenPRs = [];
-              for (const exKey in newRecords) {
-                if (!oldRecords[exKey] ||
-                    newRecords[exKey].weight > oldRecords[exKey].weight ||
-                    (newRecords[exKey].weight === oldRecords[exKey].weight && newRecords[exKey].reps > oldRecords[exKey].reps)) {
-                  brokenPRs.push({
-                    exerciseName: session.exercises.find(ex => (ex.libraryExerciseId || ex.id) === exKey)?.name || exKey,
-                    weight: newRecords[exKey].weight,
-                    reps: newRecords[exKey].reps,
-                  });
-                }
-              }
-              if (brokenPRs.length > 0) window.dispatchEvent(new CustomEvent('newPRs', { detail: brokenPRs }));
-
               navigate('finished');
-              window.dispatchEvent(new Event('workoutFinished'));
             }}
             onGoBack={() => navigate('daySelector')}
           />
@@ -402,6 +456,7 @@ export default function GymTracker({
         {view === 'daySelector' && <AnimatedView isActive={isActive('daySelector')}>{renderView()}</AnimatedView>}
         {view === 'history' && <AnimatedView isActive={isActive('history')}>{renderView()}</AnimatedView>}
         {view === 'library' && <AnimatedView isActive={isActive('library')}>{renderView()}</AnimatedView>}
+        {view === 'exerciseLibrary' && <AnimatedView isActive={isActive('exerciseLibrary')}>{renderView()}</AnimatedView>}
         {view === 'libraryAuth' && <AnimatedView isActive={isActive('libraryAuth')}>{renderView()}</AnimatedView>}
         {view === 'create' && <AnimatedView isActive={isActive('create')}>{renderView()}</AnimatedView>}
         {view === 'tracker' && <AnimatedView isActive={isActive('tracker')}>{renderView()}</AnimatedView>}
@@ -409,7 +464,7 @@ export default function GymTracker({
       </div>
 
       {toastMessage && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#D4FF00] text-[#09090B] font-semibold px-5 py-2.5 rounded-full text-xs tracking-wide shadow-[0_0_24px_rgba(212,255,0,0.3)] animate-toast-in-out backdrop-blur-sm">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#D4FF00] text-[#09090B] font-semibold px-5 py-2.5 rounded-full text-xs tracking-wide shadow-[0_0_24px_rgba(212,255,0,0.3)] backdrop-blur-sm">
           {toastMessage}
         </div>
       )}
@@ -417,17 +472,30 @@ export default function GymTracker({
       {showImportModal && (
         <ImportRoutineModal 
           onFetchGlobalRoutines={getAllGlobalRoutines}
-          onImport={addRoutineToProfile}
+          onImport={handleImportGlobal}
           onClose={() => setShowImportModal(false)}
           currentRoutines={routines}
+          isAdmin={isAdmin}
+          onEditGlobal={handleEditGlobalRoutine}
+          onDeleteGlobal={handleDeleteGlobalRoutine}
+          refreshToken={globalRoutinesVersion}
         />
       )}
     </div>
   );
 }
 
-// Componente Modal de Importación
-function ImportRoutineModal({ onFetchGlobalRoutines, onImport, onClose, currentRoutines }) {
+// ==================== MODAL DE IMPORTACIÓN ====================
+function ImportRoutineModal({ 
+  onFetchGlobalRoutines, 
+  onImport, 
+  onClose, 
+  currentRoutines, 
+  isAdmin,
+  onEditGlobal,
+  onDeleteGlobal,
+  refreshToken
+}) {
   const [selectedId, setSelectedId] = useState(null);
   const [globalRoutines, setGlobalRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -438,32 +506,66 @@ function ImportRoutineModal({ onFetchGlobalRoutines, onImport, onClose, currentR
         .then(data => { setGlobalRoutines(data || []); setLoading(false); })
         .catch(err => { console.error(err); setGlobalRoutines([]); setLoading(false); });
     }
-  }, [onFetchGlobalRoutines]);
+  }, [onFetchGlobalRoutines, refreshToken]);
 
-  const availableRoutines = loading ? [] : globalRoutines.filter(r => !currentRoutines.some(cr => cr.id === r.id));
+  // Filtramos las que ya tiene el usuario como copia local (no importar duplicados)
+  const availableRoutines = loading ? [] : globalRoutines.filter(
+    gr => !currentRoutines.some(cr => cr.parent_routine_id === gr.id)
+  );
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-[100] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl">
-        <h3 className="text-white font-bold text-base mb-2">Importar rutina</h3>
-        <p className="text-zinc-400 text-xs mb-4">Selecciona una rutina global para añadirla a tus plantillas.</p>
+        <h3 className="text-white font-bold text-base mb-2">Importar rutina global</h3>
+        <p className="text-zinc-400 text-xs mb-4">Selecciona una plantilla para añadirla a tus rutinas.</p>
         <div className="flex-1 overflow-y-auto space-y-2">
           {loading ? (
             <div className="text-center py-8 text-zinc-500">Cargando...</div>
           ) : availableRoutines.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-4">No hay rutinas disponibles para importar.</p>
+            <p className="text-zinc-500 text-sm text-center py-4">No hay rutinas globales disponibles.</p>
           ) : (
             availableRoutines.map(r => (
-              <button key={r.id} onClick={() => setSelectedId(r.id)} className={`w-full text-left p-3 rounded-xl border transition-all ${selectedId === r.id ? 'border-[#D4FF00]/40 bg-[#D4FF00]/5' : 'border-white/[0.06] bg-white/[0.02]'}`}>
-                <p className="text-white font-semibold text-sm">{r.name}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">{r.trainingDays?.length || 0} días</p>
-              </button>
+              <div key={r.id} className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                <button
+                  onClick={() => setSelectedId(r.id)}
+                  className="flex-1 text-left"
+                >
+                  <p className="text-white font-semibold text-sm">{r.name}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{r.trainingDays?.length || 0} días</p>
+                </button>
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => onEditGlobal(r)}
+                        className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white"
+                        title="Editar global"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        onClick={() => onDeleteGlobal(r.id)}
+                        className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-red-400"
+                        title="Eliminar global"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => onImport(r.id)}
+                    disabled={!r.id}
+                    className="px-3 py-1.5 bg-[#D4FF00] text-[#09090B] text-xs font-bold rounded-lg hover:bg-[#C4E600] disabled:opacity-30"
+                  >
+                    Importar
+                  </button>
+                </div>
+              </div>
             ))
           )}
         </div>
-        <div className="flex gap-3 mt-4 pt-4 border-t border-white/[0.05]">
-          <button onClick={onClose} className="flex-1 py-3 border border-white/[0.08] rounded-xl text-zinc-400 text-sm">Cancelar</button>
-          <button onClick={() => { if (selectedId) { onImport(selectedId); } }} disabled={!selectedId || loading} className="flex-1 py-3 bg-[#D4FF00] text-[#09090B] font-bold rounded-xl text-sm disabled:opacity-30">Importar</button>
+        <div className="flex justify-end mt-4 pt-4 border-t border-white/[0.05]">
+          <button onClick={onClose} className="px-4 py-2 border border-white/[0.08] rounded-xl text-zinc-400 text-sm">Cancelar</button>
         </div>
       </div>
     </div>

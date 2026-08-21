@@ -1,10 +1,68 @@
 import { supabase } from './supabaseClient';
 
+// ==================== HELPER DE CACHÉ ====================
+const cacheOrFetch = async (key, fetcher) => {
+  try {
+    const data = await fetcher();
+    if (data !== null && data !== undefined) {
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+    return data;
+  } catch (error) {
+    // Si falla (probablemente por red), intentar usar caché local
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      console.warn(`⚠️ Usando caché local para ${key}`);
+      return JSON.parse(cached);
+    }
+    console.error(`❌ Sin caché disponible para ${key}:`, error);
+    throw error; // Re-lanzar para que el componente maneje
+  }
+};
+
+// ==================== HELPER DE FORMATEO ====================
+function formatRoutineData(r) {
+  let trainingDays = [];
+
+  if (r.training_days && Array.isArray(r.training_days)) {
+    trainingDays = r.training_days;
+  } else {
+    if (r.routine_days && r.routine_days.length > 0) {
+      const sortedDays = [...r.routine_days].sort((a, b) => (a.day_index ?? 0) - (b.day_index ?? 0));
+      trainingDays = sortedDays.map(day => ({
+        id: day.id,
+        dayName: day.name,
+        dayIndex: day.day_index,
+        exercises: (day.routine_exercises || []).map(ex => ({
+          id: ex.id,
+          name: ex.name,
+          sets: ex.routine_sets || []
+        }))
+      }));
+    }
+  }
+
+  return {
+    id: r.id,
+    name: r.name,
+    month: r.month ?? 0,
+    year: r.year ?? 0,
+    trainingDays,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    is_active: r.is_active ?? false,
+    is_global: r.is_global ?? false,
+    parent_routine_id: r.parent_routine_id ?? null
+  };
+}
+
 // ==================== PERFILES ====================
 export async function fetchProfiles() {
-  const { data, error } = await supabase.from('profiles').select('*');
-  if (error) throw error;
-  return data || [];
+  return cacheOrFetch('profilesCache', async () => {
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) throw error;
+    return data || [];
+  });
 }
 
 export async function updateProfile(profile) {
@@ -22,114 +80,96 @@ export async function deleteProfile(profileId) {
   if (error) throw error;
 }
 
-// ==================== RUTINAS GLOBALES ====================
+// ==================== RUTINAS ====================
 export async function fetchUserRoutines(profileId) {
-  try {
-    const { data: assignments, error: assignError } = await supabase
-      .from('profile_routines')
-      .select('routine_id')
-      .eq('profile_id', profileId);
-
-    if (assignError) throw assignError;
-    if (!assignments || assignments.length === 0) return [];
-
-    const routineIds = assignments.map(a => a.routine_id);
-
-    const { data: routines, error: routinesError } = await supabase
+  return cacheOrFetch(`userRoutines_${profileId}`, async () => {
+    const { data, error } = await supabase
       .from('routines')
       .select('*')
-      .in('id', routineIds)
-      .is('deleted_at', null);
-
-    if (routinesError) throw routinesError;
-
-    return (routines || []).map(r => ({
-      id: r.id,
-      name: r.name,
-      month: r.month,
-      year: r.year,
-      trainingDays: r.training_days || [],
-      createdBy: r.created_by,
-      createdAt: r.created_at
-    }));
-  } catch (err) {
-    console.error('Error en fetchUserRoutines:', err);
-    throw err;
-  }
+      .eq('created_by', profileId)
+      .eq('is_global', false)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(formatRoutineData);
+  });
 }
 
 export async function fetchAllGlobalRoutines() {
-  const { data, error } = await supabase
-    .from('routines')
-    .select('*')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return (data || []).map(r => ({
-    id: r.id,
-    name: r.name,
-    month: r.month,
-    year: r.year,
-    trainingDays: r.training_days || [],
-    createdBy: r.created_by,
-    createdAt: r.created_at
-  }));
+  return cacheOrFetch('globalRoutinesCache', async () => {
+    const { data, error } = await supabase
+      .from('routines')
+      .select('*')
+      .eq('is_global', true)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(formatRoutineData);
+  });
 }
 
 export async function saveUserRoutine(profileId, routine) {
+  const isGlobal = routine.is_global ?? (routine.parent_routine_id ? false : true);
+
   const routineData = {
     id: routine.id,
     name: routine.name,
-    month: routine.month,
-    year: routine.year,
+    month: routine.month ?? 0,
+    year: routine.year ?? 0,
     training_days: routine.trainingDays || [],
-    created_by: profileId
+    created_by: isGlobal ? null : profileId,
+    is_active: routine.is_active ?? false,
+    is_global: isGlobal,
+    parent_routine_id: isGlobal ? null : routine.parent_routine_id ?? null
   };
 
-  const { error: routineError } = await supabase
+  const { error } = await supabase
     .from('routines')
     .upsert(routineData, { onConflict: 'id' });
 
-  if (routineError) throw routineError;
-
-  const { error: assignError } = await supabase
-    .from('profile_routines')
-    .upsert({
-      profile_id: profileId,
-      routine_id: routine.id
-    }, { onConflict: 'profile_id, routine_id' });
-
-  if (assignError) throw assignError;
+  if (error) throw error;
 }
 
-// ================================================================
-// 🔥 CORRECCIÓN FINAL: ELIMINACIÓN SEGURA PARA ADRIÁN 🔥
-// ================================================================
-export async function deleteUserRoutine(profileId, routineId) {
-  // CASO 1: Adrián. Tiene el poder de "Soft Delete" (papelera). 
-  // Si se arrepiente, la podrá recuperar más adelante.
-  if (profileId === 'adrian') {
-    const { error } = await supabase
-      .from('routines')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', routineId);
-    if (error) throw error;
-    return; // Termina aquí.
+export async function importRoutineToProfile(profileId, globalRoutineId) {
+  const { data: globalRoutine, error: fetchError } = await supabase
+    .from('routines')
+    .select('*')
+    .eq('id', globalRoutineId)
+    .single();
+  if (fetchError) throw fetchError;
+
+  const newId = crypto.randomUUID();
+  const localRoutine = {
+    id: newId,
+    name: globalRoutine.name,
+    month: 0,
+    year: 0,
+    training_days: globalRoutine.training_days || [],
+    created_by: profileId,
+    is_active: false,
+    is_global: false,
+    parent_routine_id: globalRoutineId
+  };
+
+  const { error: insertError } = await supabase
+    .from('routines')
+    .insert(localRoutine);
+  if (insertError) throw insertError;
+}
+
+export async function deleteUserRoutine(profileId, routineId, isGlobal = false) {
+  let query = supabase
+    .from('routines')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', routineId);
+
+  if (!isGlobal) {
+    query = query.eq('created_by', profileId).eq('is_global', false);
   }
 
-  // CASO 2: CUALQUIER OTRO PERFIL (NAYE, Esposa, Hermano, etc.).
-  // ¡NUNCA se toca la tabla global 'routines'! Solo se desvincula de su perfil.
-  // Esto protege a Adrián al 100%, incluso si NAYE fue la creadora original.
-  const { error: deleteAssignError } = await supabase
-    .from('profile_routines')
-    .delete()
-    .eq('profile_id', profileId)
-    .eq('routine_id', routineId);
-
-  if (deleteAssignError) throw deleteAssignError;
+  const { error } = await query;
+  if (error) throw error;
 }
-// ================================================================
 
 export async function restoreRoutine(routineId) {
   const { error } = await supabase
@@ -139,47 +179,52 @@ export async function restoreRoutine(routineId) {
   if (error) throw error;
 }
 
-export async function importRoutineToProfile(profileId, routineId) {
-  const { error } = await supabase
-    .from('profile_routines')
-    .insert({
-      profile_id: profileId,
-      routine_id: routineId
-    });
-  if (error) throw error;
+// ==================== EJERCICIOS ====================
+export async function fetchAllExercises() {
+  return cacheOrFetch('exercisesCache', async () => {
+    const { data, error } = await supabase
+      .from('exercises')
+      .select('*')
+      .order('name');
+    if (error) throw error;
+    return data || [];
+  });
 }
 
-// ==================== HISTORIAL DE ENTRENAMIENTO ====================
+// ==================== HISTORIAL ====================
 export async function fetchWorkoutHistory(profileId, routineId) {
-  const { data: sessions, error } = await supabase
-    .from('workout_sessions')
-    .select(`*, session_sets (*)`)
-    .eq('profile_id', profileId)
-    .eq('routine_id', routineId)
-    .order('date', { ascending: false });
-  
-  if (error) throw error;
-  if (!sessions || sessions.length === 0) return [];
+  const cacheKey = `workoutHistory_${profileId}_${routineId}`;
+  return cacheOrFetch(cacheKey, async () => {
+    const { data: sessions, error } = await supabase
+      .from('workout_sessions')
+      .select(`*, session_sets (*)`)
+      .eq('profile_id', profileId)
+      .eq('routine_id', routineId)
+      .order('date', { ascending: false });
+    if (error) throw error;
 
-  return sessions.map(session => ({
-    date: session.date,
-    routineId: session.routine_id,
-    dayIndex: session.day_index,
-    exercises: Object.values(
-      (session.session_sets || []).reduce((acc, set) => {
-        if (!acc[set.exercise_name]) {
-          acc[set.exercise_name] = { id: set.exercise_name, name: set.exercise_name, sets: [] };
-        }
-        acc[set.exercise_name].sets.push({
-          setNum: set.set_number,
-          weight: set.weight,
-          reps: set.reps,
-          done: set.done || false
-        });
-        return acc;
-      }, {})
-    )
-  }));
+    if (!sessions || sessions.length === 0) return [];
+
+    return sessions.map(session => ({
+      date: session.date,
+      routineId: session.routine_id,
+      dayIndex: session.day_index,
+      exercises: Object.values(
+        (session.session_sets || []).reduce((acc, set) => {
+          if (!acc[set.exercise_name]) {
+            acc[set.exercise_name] = { id: set.exercise_name, name: set.exercise_name, sets: [] };
+          }
+          acc[set.exercise_name].sets.push({
+            setNum: set.set_number,
+            weight: set.weight,
+            reps: set.reps,
+            done: set.done || false
+          });
+          return acc;
+        }, {})
+      )
+    }));
+  });
 }
 
 export async function saveWorkoutSession(profileId, session) {
@@ -193,7 +238,6 @@ export async function saveWorkoutSession(profileId, session) {
     })
     .select('id')
     .single();
-  
   if (sessionError) throw sessionError;
 
   const setsToInsert = [];
@@ -218,23 +262,24 @@ export async function saveWorkoutSession(profileId, session) {
   }
 }
 
-// ==================== INGESTA DIARIA Y ALIMENTOS ====================
+// ==================== INGESTA Y ALIMENTOS ====================
 export async function fetchDailyIntake(profileId) {
-  const { data, error } = await supabase
-    .from('daily_intake')
-    .select('*')
-    .eq('profile_id', profileId)
-    .order('timestamp', { ascending: false });
-  
-  if (error) throw error;
-  return (data || []).map(item => ({
-    id: item.id,
-    foodId: item.food_id,
-    foodName: item.food_name,
-    grams: item.grams,
-    macros: item.macros,
-    timestamp: item.timestamp
-  }));
+  return cacheOrFetch(`dailyIntake_${profileId}`, async () => {
+    const { data, error } = await supabase
+      .from('daily_intake')
+      .select('*')
+      .eq('profile_id', profileId)
+      .order('timestamp', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(item => ({
+      id: item.id,
+      foodId: item.food_id,
+      foodName: item.food_name,
+      grams: item.grams,
+      macros: item.macros,
+      timestamp: item.timestamp
+    }));
+  });
 }
 
 export async function addDailyIntakeItem(profileId, item) {
@@ -251,12 +296,14 @@ export async function addDailyIntakeItem(profileId, item) {
 }
 
 export async function fetchFoods() {
-  const { data, error } = await supabase
-    .from('foods')
-    .select('*')
-    .order('name');
-  if (error) throw error;
-  return data || [];
+  return cacheOrFetch('foodsCache', async () => {
+    const { data, error } = await supabase
+      .from('foods')
+      .select('*')
+      .order('name');
+    if (error) throw error;
+    return data || [];
+  });
 }
 
 export async function saveFood(food) {
@@ -266,8 +313,6 @@ export async function saveFood(food) {
   if (error) throw error;
 }
 
-// ==========================================
-// ✅ ALIAS PARA EL GYM TRACKER
-// ==========================================
+// ==================== ALIAS ====================
 export const saveRoutine = saveUserRoutine;
 export const deleteRoutine = deleteUserRoutine;

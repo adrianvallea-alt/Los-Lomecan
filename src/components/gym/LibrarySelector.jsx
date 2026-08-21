@@ -3,29 +3,50 @@ import { X, Search, Film } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
 export default function LibrarySelector({ onSelect, onClose }) {
-  // Lógica sin cambios
   const [exercises, setExercises] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { data, error: queryError } = await supabase
-          .from('exercises')
-          .select('*')
-          .order('name');
-        if (queryError) throw queryError;
-        setExercises(data || []);
-      } catch (err) {
-        console.error('Error cargando ejercicios:', err);
-        setError(err.message);
-      } finally {
+  const loadExercises = async () => {
+    setLoading(true);
+    try {
+      if (!navigator.onLine) {
+        const cached = localStorage.getItem('exercisesCache');
+        if (cached) {
+          setExercises(JSON.parse(cached));
+          setError(null);
+        } else {
+          setError('Sin conexión y no hay datos guardados.');
+        }
         setLoading(false);
+        return;
       }
-    };
-    load();
+
+      const { data, error: queryError } = await supabase
+        .from('exercises')
+        .select('*')
+        .order('name');
+      if (queryError) throw queryError;
+      setExercises(data || []);
+      setError(null);
+      localStorage.setItem('exercisesCache', JSON.stringify(data || []));
+    } catch (err) {
+      console.warn('Error cargando ejercicios, usando caché:', err);
+      const cached = localStorage.getItem('exercisesCache');
+      if (cached) {
+        setExercises(JSON.parse(cached));
+        setError(null);
+      } else {
+        setError('Error al cargar ejercicios.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadExercises();
   }, []);
 
   const filtered = exercises.filter(
@@ -80,32 +101,30 @@ export default function LibrarySelector({ onSelect, onClose }) {
               {search ? 'Sin resultados' : 'No hay ejercicios en la biblioteca'}
             </p>
           )}
-          {!loading &&
-            !error &&
-            filtered.map((ex, index) => (
-              <button
-                key={ex.id}
-                onClick={() => onSelect(ex)}
-                className="w-full text-left bg-white/[0.02] border border-white/[0.05] rounded-xl p-3.5 transition-all hover:border-[#D4FF00]/20 hover:bg-white/[0.04] active:scale-[0.98] flex items-center justify-between animate-fade-in-up"
-                style={{ animationDelay: `${index * 40}ms` }}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-white font-medium text-sm truncate">{ex.name}</p>
-                  <p className="text-xs text-[#D4FF00]/80 mt-0.5">
-                    {ex.muscle}
-                    {ex.secondary_muscles ? ` + ${ex.secondary_muscles}` : ''}
+          {!loading && !error && filtered.map((ex, index) => (
+            <button
+              key={ex.id}
+              onClick={() => onSelect(ex)}
+              className="w-full text-left bg-white/[0.02] border border-white/[0.05] rounded-xl p-3.5 transition-all hover:border-[#D4FF00]/20 hover:bg-white/[0.04] active:scale-[0.98] flex items-center justify-between animate-fade-in-up"
+              style={{ animationDelay: `${index * 40}ms` }}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-white font-medium text-sm truncate">{ex.name}</p>
+                <p className="text-xs text-[#D4FF00]/80 mt-0.5">
+                  {ex.muscle}
+                  {ex.secondary_muscles ? ` + ${ex.secondary_muscles}` : ''}
+                </p>
+                {ex.default_series > 0 && (
+                  <p className="text-[10px] text-zinc-500 mt-1 font-medium">
+                    {ex.default_series} series{ex.default_reps ? ` · ${ex.default_reps}` : ''}
                   </p>
-                  {ex.default_series > 0 && (
-                    <p className="text-[10px] text-zinc-500 mt-1 font-medium">
-                      {ex.default_series} series{ex.default_reps ? ` · ${ex.default_reps}` : ''}
-                    </p>
-                  )}
-                </div>
-                {ex.video_url && (
-                  <Film size={16} className="text-[#D4FF00]/60 ml-2 flex-shrink-0" />
                 )}
-              </button>
-            ))}
+              </div>
+              {ex.video_url && (
+                <Film size={16} className="text-[#D4FF00]/60 ml-2 flex-shrink-0" />
+              )}
+            </button>
+          ))}
         </div>
       </div>
 

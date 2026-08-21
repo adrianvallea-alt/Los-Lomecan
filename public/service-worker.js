@@ -1,20 +1,33 @@
-const CACHE_NAME = 'lomecan-v2';
+const CACHE_NAME = 'lomecan-v3'; // Incrementa la versión para forzar actualización
 
 // ============================================================
-// INSTALACIÓN: precargar recursos esenciales
+// Función para obtener la URL base de la app (relativa al SW)
+// ============================================================
+const getBaseUrl = () => {
+  return self.location.pathname.replace(/\/[^/]*$/, '/');
+};
+
+// ============================================================
+// INSTALACIÓN: precargar recursos esenciales con URLs correctas
 // ============================================================
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('🔧 Service Worker: Instalando...');
-      return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.json',
-        '/favicon-16x16.png',
-        '/icons/icon-192.png',
-        '/icons/icon-512.png'
-      ]).catch(err => console.warn('⚠️ Error precargando:', err));
+      const base = getBaseUrl();
+      const precacheUrls = [
+        base,                    // página principal (index.html)
+        base + 'index.html',
+        base + 'manifest.json',
+        base + 'favicon-16x16.png',
+        base + 'icons/icon-192.png',
+        base + 'icons/icon-512.png'
+      ];
+
+      console.log('🔧 Service Worker: Instalando...', precacheUrls);
+      return cache.addAll(precacheUrls).catch(err => {
+        console.warn('⚠️ Error precargando algunos recursos:', err);
+        // No lanzamos error para que la instalación continúe
+      });
     })
   );
   self.skipWaiting();
@@ -31,7 +44,6 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname.includes('supabase.co')) {
     event.respondWith(
       fetch(request).catch(() => {
-        // Si falla la red, devolver un error (no caché)
         return new Response(
           JSON.stringify({ error: 'No hay conexión a internet' }),
           { status: 503, headers: { 'Content-Type': 'application/json' } }
@@ -54,26 +66,31 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          return caches.match('/index.html').then(cached => {
+          const base = getBaseUrl();
+          return caches.match(base + 'index.html').then(cached => {
             if (cached) {
               console.log('📄 Sirviendo index.html desde caché (offline)');
               return cached;
             }
-            return new Response(
-              '<h1>Sin conexión</h1><p>La aplicación no está disponible offline.</p>',
-              { headers: { 'Content-Type': 'text/html' } }
-            );
+            // Último recurso: intentar con la URL original
+            return caches.match('/index.html').then(cached2 => {
+              if (cached2) return cached2;
+              return new Response(
+                '<h1>Sin conexión</h1><p>La aplicación no está disponible offline.</p>',
+                { headers: { 'Content-Type': 'text/html' } }
+              );
+            });
           });
         })
     );
     return;
   }
 
-  // === 4. RECURSOS ESTÁTICOS: cache-first ===
+  // === 4. RECURSOS ESTÁTICOS: cache-first con stale-while-revalidate ===
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Si está en caché, devolverlo y actualizar en segundo plano (stale-while-revalidate)
+        // Actualizar en segundo plano
         fetch(request)
           .then((response) => {
             if (response && response.status === 200) {
@@ -85,7 +102,6 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
 
-      // Si no está en caché, ir a la red
       return fetch(request)
         .then((response) => {
           if (response && response.status === 200) {

@@ -44,7 +44,7 @@ const AVAILABLE_SUPPLEMENTS = [
   { name: 'Glutamina', waterPerGram: 0 },
 ];
 
-// ==================== FÓRMULAS CIENTÍFICAS (INTACTAS) ====================
+// ==================== FÓRMULAS CIENTÍFICAS MEJORADAS ====================
 const calculateBMR = (weight, height, age, gender) => {
   if (!weight || !height || !age) return 0;
   const bmr = gender === 'female'
@@ -61,28 +61,43 @@ const getActivityFactor = (level) => {
 const calculateTDEE = (bmr, activityLevel) => Math.round(bmr * getActivityFactor(activityLevel));
 
 const calculateMacroGoalsWithConditions = (tdee, weight, goalType, conditions = []) => {
+  // 1. Ajuste de calorías según objetivo (porcentaje del TDEE)
   let targetCalories = tdee;
-  if (goalType === 'lose') targetCalories = tdee - 500;
-  else if (goalType === 'gain') targetCalories = tdee + 500;
-
-  let proteinPct = 0.25, carbPct = 0.45, fatPct = 0.30;
-
-  if (conditions.includes('pcos') || conditions.includes('insulin_resistance') || conditions.includes('type2_diabetes')) {
-    proteinPct = 0.30;
-    carbPct = 0.40;
-    fatPct = 0.30;
-  } else if (conditions.includes('hypertension')) {
-    proteinPct = 0.25;
-    carbPct = 0.45;
-    fatPct = 0.30;
+  if (goalType === 'lose') {
+    const deficit = Math.min(Math.max(tdee * 0.20, 300), 800); // 20% déficit, entre 300-800 kcal
+    targetCalories = tdee - deficit;
+  } else if (goalType === 'gain') {
+    const surplus = Math.min(Math.max(tdee * 0.10, 200), 600); // 10% superávit, entre 200-600 kcal
+    targetCalories = tdee + surplus;
   }
 
-  const protein = Math.round((targetCalories * proteinPct) / 4);
-  const fat = Math.round((targetCalories * fatPct) / 9);
-  const carbs = Math.round((targetCalories - (protein * 4) - (fat * 9)) / 4);
+  // 2. Proteínas según objetivo y peso corporal (g/kg)
+  let proteinPerKg = 1.8; // mantenimiento por defecto
+  if (goalType === 'lose') proteinPerKg = 2.2;
+  else if (goalType === 'gain') proteinPerKg = 2.0;
+
+  // Condiciones especiales
+  if (conditions.includes('pcos') || conditions.includes('insulin_resistance') || conditions.includes('type2_diabetes')) {
+    proteinPerKg = Math.max(proteinPerKg, 2.2); // subir proteína
+  }
+
+  const protein = Math.round(proteinPerKg * weight);
+
+  // 3. Grasas según peso corporal (g/kg) y condiciones
+  let fatPerKg = 0.8; // estándar
+  if (conditions.includes('hypertension')) fatPerKg = 0.7; // menos grasa
+  if (goalType === 'lose') fatPerKg = 0.6; // ligeramente menor en déficit
+
+  const fat = Math.round(Math.max(fatPerKg * weight, 0.5 * weight)); // mínimo 0.5 g/kg
+
+  // 4. Carbohidratos restantes (evitar negativos)
+  const proteinCalories = protein * 4;
+  const fatCalories = fat * 9;
+  const carbCalories = Math.max(targetCalories - proteinCalories - fatCalories, 0);
+  const carbs = Math.round(carbCalories / 4);
 
   return {
-    cal: targetCalories,
+    cal: Math.round(targetCalories),
     pro: protein,
     carb: Math.max(carbs, 0),
     fat: fat,
@@ -91,7 +106,7 @@ const calculateMacroGoalsWithConditions = (tdee, weight, goalType, conditions = 
 
 const calculateWaterGoal = (weight) => Math.round(weight * 35);
 
-// ==================== COMPRESIÓN DE IMAGEN (INTACTA) ====================
+// ==================== COMPRESIÓN DE IMAGEN ====================
 const compressImage = (file, maxWidth = 200, maxHeight = 200, quality = 0.8) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -122,18 +137,16 @@ const compressImage = (file, maxWidth = 200, maxHeight = 200, quality = 0.8) => 
   });
 };
 
-// Clave única para cada color (soporta ambos formatos)
 const getColorKey = (c) => c.id || c.name;
 const getDefaultColor = () => COLORS[0] ? getColorKey(COLORS[0]) : '';
 
 export default function EditProfileModal({ profile, onSave, onCancel }) {
-  // ==================== LÓGICA DE ESTADO 100% INTACTA ====================
+  // ==================== LÓGICA DE ESTADO ====================
   const [tab, setTab] = useState('profile');
   const [name, setName] = useState(profile?.name || '');
   const [pin, setPin] = useState(profile?.pin || '');
   const [role, setRole] = useState(profile?.role || '');
-  
-  // ---- CORRECCIÓN DEL COLOR (soporta ambos formatos) ----
+
   const [color, setColor] = useState(() => {
     if (profile?.color) {
       const found = COLORS.find(c => getColorKey(c) === profile.color);
@@ -141,7 +154,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
     }
     return getDefaultColor();
   });
-  // ------------------------------
+
   const [avatar, setAvatar] = useState(profile?.avatar || '😎');
   const [useImage, setUseImage] = useState(!!profile?.avatar?.startsWith('http'));
   const [imageFile, setImageFile] = useState(null);
@@ -253,7 +266,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
       name,
       pin,
       role,
-      color, // Guardamos la clave única (id o name)
+      color,
       avatar: avatarUrl,
       weight: parseFloat(weight) || null,
       height: parseFloat(height) || null,
@@ -291,7 +304,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
     }
   });
 
-  // ==================== NUEVA INTERFAZ PREMIUM ====================
+  // ==================== INTERFAZ ====================
   return (
     <div className="fixed inset-0 z-50 bg-[#09090B]/95 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full sm:max-w-md bg-[#0A0A0C] border border-white/[0.07] sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col max-h-[90vh] shadow-2xl shadow-black/40 animate-slide-up">
@@ -339,7 +352,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
         <div className="flex-1 overflow-y-auto px-6 pb-6">
           <div className="space-y-6">
             
-            {/* ---------- PESTAÑA PERFIL ---------- */}
+            {/* Pestaña Perfil */}
             {tab === 'profile' && (
               <>
                 {/* Avatar */}
@@ -457,7 +470,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
               </>
             )}
 
-            {/* ---------- PESTAÑA CUERPO ---------- */}
+            {/* Pestaña Cuerpo */}
             {tab === 'body' && (
               <>
                 <div className="grid grid-cols-2 gap-4">
@@ -541,7 +554,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
               </>
             )}
 
-            {/* ---------- PESTAÑA SALUD ---------- */}
+            {/* Pestaña Salud */}
             {tab === 'health' && (
               <>
                 <p className="text-xs text-zinc-500 mb-4">Selecciona tus condiciones de salud para ajustar tus recomendaciones</p>
@@ -622,7 +635,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
               </>
             )}
 
-            {/* ---------- PESTAÑA RECORDATORIOS ---------- */}
+            {/* Pestaña Recordatorios */}
             {tab === 'reminders' && (
               <div className="space-y-5">
                 <p className="text-xs text-zinc-500 mb-2">Configura recordatorios para mantener tus hábitos</p>

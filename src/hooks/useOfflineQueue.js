@@ -9,7 +9,7 @@ export default function useOfflineQueue(profileId) {
   const [isSyncing, setIsSyncing] = useState(false);
   const syncInProgress = useRef(false);
 
-  // Cargar cola del localStorage
+  // Cargar cola al cambiar de perfil
   useEffect(() => {
     if (!profileId) return;
     const stored = localStorage.getItem(QUEUE_KEY(profileId));
@@ -19,10 +19,12 @@ export default function useOfflineQueue(profileId) {
       } catch (e) {
         setQueue([]);
       }
+    } else {
+      setQueue([]);
     }
   }, [profileId]);
 
-  // Guardar cola en localStorage cuando cambie
+  // Guardar cola en localStorage
   useEffect(() => {
     if (!profileId) return;
     localStorage.setItem(QUEUE_KEY(profileId), JSON.stringify(queue));
@@ -30,8 +32,12 @@ export default function useOfflineQueue(profileId) {
 
   // Detectar cambios de conexión
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
@@ -40,7 +46,7 @@ export default function useOfflineQueue(profileId) {
     };
   }, []);
 
-  // Procesar cola cuando se recupere la conexión
+  // Procesar cola solo cuando hay conexión
   useEffect(() => {
     if (isOnline && queue.length > 0 && !syncInProgress.current) {
       processQueue();
@@ -48,7 +54,7 @@ export default function useOfflineQueue(profileId) {
   }, [isOnline, queue]);
 
   const processQueue = async () => {
-    if (syncInProgress.current || queue.length === 0) return;
+    if (syncInProgress.current || queue.length === 0 || !isOnline) return;
     syncInProgress.current = true;
     setIsSyncing(true);
 

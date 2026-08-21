@@ -1,14 +1,12 @@
 import React from 'react';
-import { Calendar, Plus, Trash2 } from 'lucide-react';
-import { MONTHS } from '../../utils/gymHelpers';
+import { Calendar, Plus, Play } from 'lucide-react';
 
 export default function RoutineHome({ 
   currentRoutine, 
   onStartWorkout, 
   onManageTemplates,
-  onDeleteRoutine
 }) {
-  // Si hay una rutina activa para este mes
+  // Si hay una rutina activa
   if (currentRoutine) {
     return (
       <div className="flex flex-col h-full animate-fade-in safe-top safe-bottom bg-[#09090B]">
@@ -17,36 +15,29 @@ export default function RoutineHome({
         </div>
         
         <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-safe space-y-4">
-          
-          {/* ✅ NUEVO DISEÑO DE TARJETA */}
-          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 hover:border-white/[0.08] transition-all">
-            
-            {/* Información del lado izquierdo */}
-            <div className="flex-1 min-w-0 text-left">
-              <h3 className="text-white font-semibold text-base truncate">{currentRoutine.name}</h3>
-              <p className="text-xs text-zinc-500 mt-1">
-                {MONTHS[currentRoutine.month - 1]} {currentRoutine.year} · {currentRoutine.trainingDays?.length || 0} días
-              </p>
-            </div>
+          {/* Tarjeta de la rutina activa */}
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 transition-all hover:border-white/[0.08]">
+            <div className="flex items-center justify-between gap-4">
+              {/* Columna izquierda: nombre e info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-white font-semibold text-base truncate">{currentRoutine.name}</h3>
+                </div>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Activa · {currentRoutine.trainingDays?.length || 0} días
+                </p>
+              </div>
 
-            {/* Botones de acción del lado derecho */}
-            <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+              {/* Botón de iniciar más ancho */}
               <button
                 onClick={() => onStartWorkout(currentRoutine)}
-                className="flex-1 sm:flex-none px-5 py-2.5 bg-[#D4FF00] text-[#09090B] font-bold rounded-xl text-sm active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                className="flex-shrink-0 px-10 py-4 min-w-[120px] bg-[#D4FF00] text-[#09090B] font-bold rounded-xl text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md shadow-[#D4FF00]/20 hover:bg-[#C4E600]"
               >
+                <Play size={16} />
                 Iniciar
-              </button>
-              <button
-                onClick={() => onDeleteRoutine(currentRoutine.id)}
-                className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-red-400 hover:border-red-400/20 active:scale-90 transition-all"
-                title="Eliminar rutina en curso"
-              >
-                <Trash2 size={16} />
               </button>
             </div>
           </div>
-          {/* ✅ FIN DEL NUEVO DISEÑO */}
 
           {/* Botón para ir al gestor de plantillas */}
           <button
@@ -61,7 +52,7 @@ export default function RoutineHome({
     );
   }
 
-  // Si no hay rutina activa, mostramos pantalla vacía
+  // Si no hay rutina activa
   return (
     <div className="flex flex-col h-full animate-fade-in safe-top safe-bottom bg-[#09090B]">
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-safe">

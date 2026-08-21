@@ -12,9 +12,21 @@
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Evitar pull-to-refresh en toda la app */
+  html,
+  body,
+  #root {
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+  }
+}
+
+/* Clase utilitaria para aplicar a contenedores con scroll */
+.overscroll-none {
+  overscroll-behavior: none;
 }
 
 /* Safe areas para PWA (sin cambios) */

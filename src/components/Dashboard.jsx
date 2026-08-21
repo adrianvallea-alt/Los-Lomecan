@@ -5,7 +5,7 @@ import MealSuggestions from './MealSuggestions';
 import ShareAchievementModal from './ShareAchievementModal';
 
 // ==========================================================================
-// CÍRCULO DE AGUA
+// CÍRCULO DE AGUA (con gradiente y brillo)
 // ==========================================================================
 const WaterCircle = memo(({ percent }) => {
   const getMotivationalMessage = (p) => {
@@ -26,6 +26,12 @@ const WaterCircle = memo(({ percent }) => {
     <div className="flex flex-col items-center gap-3 w-full shrink-0">
       <div className="relative w-[116px] h-[116px] flex items-center justify-center">
         <svg height="116" width="116" className="transform -rotate-90">
+          <defs>
+            <linearGradient id="waterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={color} stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.7" />
+            </linearGradient>
+          </defs>
           <circle
             stroke="rgba(255,255,255,0.04)"
             fill="transparent"
@@ -35,7 +41,7 @@ const WaterCircle = memo(({ percent }) => {
             cy="58"
           />
           <circle
-            stroke={color}
+            stroke="url(#waterGradient)"
             fill="transparent"
             strokeWidth={stroke}
             strokeDasharray={`${circumference} ${circumference}`}
@@ -44,11 +50,12 @@ const WaterCircle = memo(({ percent }) => {
             r={normalizedRadius}
             cx="58"
             cy="58"
+            filter="drop-shadow(0 0 6px currentColor)"
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           <Droplet size={22} style={{ color }} className="mb-0.5" />
-          <span className="text-lg font-bold tracking-tight text-white leading-none">
+          <span className="text-lg font-bold tracking-tight text-white leading-none tabular-nums">
             {Math.round(percent)}%
           </span>
         </div>
@@ -63,7 +70,7 @@ const WaterCircle = memo(({ percent }) => {
 });
 
 // ==========================================================================
-// TRACKER DE AGUA
+// TRACKER DE AGUA (con fondo y sombras más definidos)
 // ==========================================================================
 const WaterTracker = memo(({ waterGoal, profileId }) => {
   const storageKey = `water_${profileId}_${new Date().toDateString()}`;
@@ -94,10 +101,10 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
 
   return (
     <div className="relative z-10 mb-5 shrink-0">
-      <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2rem] p-5 flex flex-col">
+      <div className="border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl rounded-[2rem] p-5 flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
         <div className="flex justify-between items-center mb-4">
           <span className="text-[11px] font-semibold text-stone-300 uppercase tracking-wider">Agua</span>
-          <span className="text-[10px] font-semibold text-stone-400 tabular-nums bg-stone-950/40 px-3 py-1 rounded-full border border-white/[0.04]">
+          <span className="text-[10px] font-semibold text-stone-400 tabular-nums bg-stone-950/60 px-3 py-1 rounded-full border border-white/[0.05]">
             {waterCurrent} / {waterGoal} ml
           </span>
         </div>
@@ -126,7 +133,7 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
           </div>
           <button
             onClick={() => addWater(250)}
-            className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.05] hover:border-[#d4ff00]/30 active:scale-95 flex items-center justify-center text-stone-300 transition-all"
+            className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.05] hover:border-[#d4ff00]/40 active:scale-95 flex items-center justify-center text-stone-300 transition-all"
           >
             <Plus size={14} />
           </button>
@@ -148,7 +155,7 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
 });
 
 // ==========================================================================
-// MACROBAR
+// MACROBAR (con barras más gruesas y brillo)
 // ==========================================================================
 const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
   const percent = Math.min((current / max) * 100, 100);
@@ -161,9 +168,9 @@ const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
           <span className="text-stone-500 font-normal text-[10px]">/{max}{unit}</span>
         </span>
       </div>
-      <div className="w-full h-[3px] bg-white/[0.05] rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_6px_currentColor]"
+          className="h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_8px_currentColor]"
           style={{ width: `${percent}%`, backgroundColor: color, color }}
         />
       </div>
@@ -172,7 +179,7 @@ const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
 });
 
 // ==========================================================================
-// ANILLO DE CALORÍAS
+// ANILLO DE CALORÍAS (con gradiente y sombra)
 // ==========================================================================
 const CalorieRing = memo(({ current, max }) => {
   const remaining = max - current;
@@ -188,6 +195,12 @@ const CalorieRing = memo(({ current, max }) => {
     <div className="relative flex flex-col items-center justify-center py-3 w-full shrink-0">
       <div className="relative w-[136px] h-[136px] flex items-center justify-center">
         <svg height="136" width="136" className="-rotate-90 absolute">
+          <defs>
+            <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={strokeColor} stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.6" />
+            </linearGradient>
+          </defs>
           <circle
             stroke="rgba(255,255,255,0.04)"
             fill="transparent"
@@ -197,7 +210,7 @@ const CalorieRing = memo(({ current, max }) => {
             cy="68"
           />
           <circle
-            stroke={strokeColor}
+            stroke="url(#calorieGradient)"
             fill="transparent"
             strokeWidth={stroke}
             strokeDasharray={`${circumference} ${circumference}`}
@@ -223,13 +236,13 @@ const CalorieRing = memo(({ current, max }) => {
 });
 
 // ==========================================================================
-// DASHBOARD PRINCIPAL
+// DASHBOARD PRINCIPAL (con toques premium)
 // ==========================================================================
 export default function Dashboard({
   profile,
   dailyIntake,
-  currentRoutine,    // <-- ya no se usa, pero se mantiene para no romper la interfaz
-  onStartWorkout,    // <-- ya no se usa, pero se mantiene
+  currentRoutine,
+  onStartWorkout,
   onGoToRoutines,
   onGoToEvolution,
   onAddFood
@@ -274,11 +287,12 @@ export default function Dashboard({
     <div className="flex flex-col px-5 pt-0 pb-[80px] text-white bg-[#09090B] select-none relative">
       <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[radial-gradient(circle_at_50%_0%,#ffffff10,transparent_70%)]" />
 
+      {/* Header con racha y compartir */}
       <div className="flex items-center justify-between mb-5 relative z-10 shrink-0">
         <div className="flex items-center gap-2">
           <Sun size={14} className="text-[#d4ff00]" />
           <h2 className="text-[11px] font-semibold tracking-[0.15em] text-stone-400 uppercase">Hoy</h2>
-          <div className="flex items-center gap-1.5 ml-2 bg-[#d4ff00]/10 border border-[#d4ff00]/20 rounded-full px-3 py-1 text-[10px] font-semibold tracking-wider text-[#d4ff00] uppercase">
+          <div className="flex items-center gap-1.5 ml-2 bg-[#d4ff00]/10 border border-[#d4ff00]/20 rounded-full px-3 py-1 text-[10px] font-semibold tracking-wider text-[#d4ff00] uppercase shadow-[0_0_10px_rgba(212,255,0,0.1)]">
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#d4ff00] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#d4ff00]"></span>
@@ -288,46 +302,50 @@ export default function Dashboard({
         </div>
         <button
           onClick={() => setShowShareModal(true)}
-          className="flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] active:scale-[0.97] rounded-full px-3.5 py-1.5 text-[10px] font-medium text-stone-300 tracking-wide uppercase transition-all"
+          className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.08] active:scale-[0.97] rounded-full px-3.5 py-1.5 text-[10px] font-medium text-stone-300 tracking-wide uppercase transition-all hover:bg-white/[0.06] hover:shadow-[0_0_15px_rgba(212,255,0,0.1)]"
         >
           <Share2 size={12} className="text-[#d4ff00]" />
           Compartir
         </button>
       </div>
 
+      {/* Anillo de calorías */}
       <div className="relative z-10 mb-4 shrink-0">
-        <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2.5rem] p-5 flex flex-col items-center">
+        <div className="border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl rounded-[2rem] p-5 flex flex-col items-center shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
           <CalorieRing current={todayData.cal.current} max={todayData.cal.max} />
         </div>
       </div>
 
+      {/* Macros */}
       <div className="relative z-10 mb-4 shrink-0">
-        <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2rem] p-5 flex flex-col gap-4">
+        <div className="border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl rounded-[2rem] p-5 flex flex-col gap-5 shadow-[0_8px_30px_rgba(0,0,0,0.25)]">
           <MacroBar label="Proteína" current={todayData.pro.current} max={todayData.pro.max} color="#60a5fa" />
           <MacroBar label="Carbohidratos" current={todayData.carb.current} max={todayData.carb.max} color="#a78bfa" />
           <MacroBar label="Grasas" current={todayData.fat.current} max={todayData.fat.max} color="#fbbf24" />
         </div>
       </div>
 
+      {/* Sugerencias de comidas */}
       <div className="mb-4 relative z-10 shrink-0">
         <MealSuggestions remainingMacros={remainingMacros} goals={goals} onAddFood={onAddFood} />
       </div>
 
+      {/* Tracker de agua */}
       <WaterTracker waterGoal={profile?.water_goal || 2000} profileId={profile?.id} />
 
+      {/* Acciones inferiores */}
       <div className="flex flex-col gap-3 relative z-10 shrink-0">
         <button
           onClick={onGoToEvolution}
-          className="mx-auto flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-stone-400 hover:text-white transition-all bg-white/[0.02] border border-white/[0.05] rounded-full px-5 py-2.5 active:scale-95"
+          className="mx-auto flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-stone-400 hover:text-white transition-all bg-white/[0.03] border border-white/[0.06] rounded-full px-5 py-2.5 active:scale-95 hover:shadow-[0_0_15px_rgba(212,255,0,0.1)]"
         >
           <Scale size={13} className="text-[#d4ff00]" />
           Registrar peso
         </button>
 
-        {/* 🔽 Botón de entrenamiento: siempre abre la lista de rutinas */}
         <button
           onClick={onGoToRoutines}
-          className="w-full h-14 rounded-2xl flex items-center justify-center gap-3.5 transition-all duration-300 active:scale-[0.98] uppercase tracking-[0.15em] font-semibold text-xs text-stone-950 bg-white hover:bg-stone-100 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+          className="w-full h-14 rounded-2xl flex items-center justify-center gap-3.5 transition-all duration-300 active:scale-[0.98] uppercase tracking-[0.15em] font-semibold text-xs text-stone-950 bg-white hover:bg-stone-100 shadow-[0_0_25px_rgba(255,255,255,0.15)] hover:shadow-[0_0_30px_rgba(255,255,255,0.25)]"
         >
           <Play size={12} fill="currentColor" />
           Mis Rutinas

@@ -5,29 +5,49 @@ import useWeightLogs from '../hooks/useWeightLogs';
 import useBodyMeasures from '../hooks/useBodyMeasures';
 import ProgressPhotos from './ProgressPhotos';
 
-// Componente LineChart con colores y tipografía refinados (lógica interna intacta)
+// ===== LineChart con validación contra NaN =====
 const LineChart = ({ data, maxValue, color, unit = '', width = 300, height = 120 }) => {
-  if (data.length === 0) return null;
+  if (!data || data.length === 0) return null;
+
+  // Filtrar y sanitizar valores
+  const validData = data
+    .filter(item => typeof item.value === 'number' && !isNaN(item.value))
+    .map(item => ({ ...item, value: Math.max(0, item.value) })); // evitar negativos
+
+  if (validData.length === 0) return null;
+
   const padding = { top: 20, right: 10, bottom: 20, left: 10 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-  const effectiveMax = data.length === 1 ? data[0].value * 1.2 : maxValue;
-  const points = data.map((item, idx) => ({
-    x: padding.left + (idx / Math.max(data.length - 1, 1)) * chartWidth,
+  const chartWidth = Math.max(width - padding.left - padding.right, 0);
+  const chartHeight = Math.max(height - padding.top - padding.bottom, 0);
+
+  // Calcular máximo efectivo seguro
+  const maxInData = Math.max(...validData.map(d => d.value));
+  const safeMax = Math.max(maxInData, maxValue || 0, 1); // al menos 1
+  const effectiveMax = validData.length === 1 ? maxInData * 1.2 || 1 : safeMax;
+
+  const points = validData.map((item, idx) => ({
+    x: padding.left + (idx / Math.max(validData.length - 1, 1)) * chartWidth,
     y: padding.top + chartHeight - (item.value / effectiveMax) * chartHeight,
     ...item
   }));
+
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
   return (
     <div className="flex justify-center">
       <svg width={width} height={height} className="overflow-visible">
-        {data.length > 1 && <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+        {validData.length > 1 && (
+          <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        )}
         {points.map((point, idx) => (
           <g key={idx}>
             <circle cx={point.x} cy={point.y} r="4" fill="#09090B" stroke={color} strokeWidth="2" />
-            <text x={point.x} y={point.y - 8} textAnchor="middle" fill="#A1A1AA" fontSize="9" fontWeight="500">{point.value}{unit}</text>
-            <text x={point.x} y={height - 4} textAnchor="middle" fill="#52525B" fontSize="8">{point.label}</text>
+            <text x={point.x} y={point.y - 8} textAnchor="middle" fill="#A1A1AA" fontSize="9" fontWeight="500">
+              {Number.isFinite(point.value) ? `${point.value}${unit}` : ''}
+            </text>
+            <text x={point.x} y={height - 4} textAnchor="middle" fill="#52525B" fontSize="8">
+              {point.label || ''}
+            </text>
           </g>
         ))}
       </svg>
@@ -35,7 +55,7 @@ const LineChart = ({ data, maxValue, color, unit = '', width = 300, height = 120
   );
 };
 
-// Helpers de semana (sin cambios)
+// Helpers de semana sin cambios
 function getWeekNumber(d) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dayNum = date.getUTCDay() || 7;
@@ -56,7 +76,6 @@ function getMondayOfWeek(year, weekNumber) {
 }
 
 export default function EvolutionView({ activeProfile }) {
-  // Estados (intactos)
   const [weightInput, setWeightInput] = useState('');
   const [showMeasureForm, setShowMeasureForm] = useState(false);
   const [chest, setChest] = useState('');
@@ -64,20 +83,23 @@ export default function EvolutionView({ activeProfile }) {
   const [hips, setHips] = useState('');
   const [arms, setArms] = useState('');
   const [thighs, setThighs] = useState('');
-
   const [showPhotos, setShowPhotos] = useState(false);
 
   const { logs: weightLogs, addLog } = useWeightLogs(activeProfile.id);
   const { measures, history: measuresHistory, saveMeasures } = useBodyMeasures(activeProfile.id);
 
-  // Datos de peso (intactos)
-  const weightData = weightLogs.slice(-30).map(entry => ({
-    label: `${new Date(entry.date).getDate()}/${new Date(entry.date).getMonth() + 1}`,
-    value: entry.weight
-  }));
-  const maxWeight = Math.max(...weightData.map(w => w.value), 1);
+  // ===== Datos de peso (filtrados) =====
+  const weightData = weightLogs
+    .slice(-30)
+    .map(entry => ({
+      label: `${new Date(entry.date).getDate()}/${new Date(entry.date).getMonth() + 1}`,
+      value: parseFloat(entry.weight)
+    }))
+    .filter(item => typeof item.value === 'number' && !isNaN(item.value));
 
-  // Datos de medidas (intactos)
+  const maxWeight = weightData.length > 0 ? Math.max(...weightData.map(w => w.value), 1) : 1;
+
+  // ===== Datos de medidas (filtrados) =====
   const measuresKeys = ['chest', 'waist', 'hips', 'arms', 'thighs'];
   const measuresColors = { chest: '#F472B6', waist: '#60A5FA', hips: '#C084FC', arms: '#34D399', thighs: '#FBBF24' };
   const measuresLabels = { chest: 'Pecho', waist: 'Cintura', hips: 'Cadera', arms: 'Brazos', thighs: 'Muslos' };
@@ -89,12 +111,14 @@ export default function EvolutionView({ activeProfile }) {
       .map(entry => ({
         label: `${new Date(entry.date).getDate()}/${new Date(entry.date).getMonth() + 1}`,
         value: parseFloat(entry[key])
-      }));
-    const maxVal = Math.max(...data.map(d => d.value), 1);
+      }))
+      .filter(item => typeof item.value === 'number' && !isNaN(item.value));
+
+    const maxVal = data.length > 0 ? Math.max(...data.map(d => d.value), 1) : 1;
     return { key, data, maxVal, color: measuresColors[key], label: measuresLabels[key] };
   });
 
-  // Cálculo de volumen y frecuencia (intacto)
+  // ===== Volumen y frecuencia semanales =====
   const [weeklyVolume, setWeeklyVolume] = useState([]);
   const [weeklyFrequency, setWeeklyFrequency] = useState([]);
   const [topExercises, setTopExercises] = useState([]);
@@ -141,7 +165,8 @@ export default function EvolutionView({ activeProfile }) {
         session.exercises.forEach(ex => {
           const exKey = ex.libraryExerciseId || ex.id;
           ex.sets.forEach(set => {
-            const w = parseFloat(set.weight), r = parseInt(set.reps);
+            const w = parseFloat(set.weight);
+            const r = parseInt(set.reps);
             if (isNaN(w) || isNaN(r)) return;
             if (!exerciseRecords[exKey] || w > exerciseRecords[exKey].weight ||
                 (w === exerciseRecords[exKey].weight && r > exerciseRecords[exKey].reps)) {
@@ -172,27 +197,32 @@ export default function EvolutionView({ activeProfile }) {
     loadData();
   }, [activeProfile.id]);
 
-  const maxVolume = Math.max(...weeklyVolume.map(m => m.value), 1);
-  const maxDays = Math.max(...weeklyFrequency.map(m => m.value), 1);
+  const maxVolume = weeklyVolume.length > 0 ? Math.max(...weeklyVolume.map(m => m.value), 1) : 1;
+  const maxDays = weeklyFrequency.length > 0 ? Math.max(...weeklyFrequency.map(m => m.value), 1) : 1;
 
-  // Funciones de guardado (intactas)
+  // ===== Guardado de peso y medidas =====
   const handleAddWeight = () => {
-    if (weightInput && parseFloat(weightInput) > 0) {
-      addLog(weightInput);
+    const weight = parseFloat(weightInput);
+    if (!isNaN(weight) && weight > 0) {
+      addLog(weight);
       setWeightInput('');
     }
   };
 
   const handleSaveMeasures = () => {
-    saveMeasures({
+    const parsed = {
       chest: parseFloat(chest) || measures.chest || null,
       waist: parseFloat(waist) || measures.waist || null,
       hips: parseFloat(hips) || measures.hips || null,
       arms: parseFloat(arms) || measures.arms || null,
       thighs: parseFloat(thighs) || measures.thighs || null,
-    });
-    setChest(''); setWaist(''); setHips(''); setArms(''); setThighs('');
-    setShowMeasureForm(false);
+    };
+    // Solo guardar si al menos un valor es válido
+    if (Object.values(parsed).some(v => v !== null && !isNaN(v))) {
+      saveMeasures(parsed);
+      setChest(''); setWaist(''); setHips(''); setArms(''); setThighs('');
+      setShowMeasureForm(false);
+    }
   };
 
   const openMeasureForm = () => {
@@ -210,12 +240,10 @@ export default function EvolutionView({ activeProfile }) {
 
   return (
     <div className="flex-1 flex flex-col animate-fade-in safe-top safe-bottom bg-[#09090B] relative">
-      {/* Fondo ambiental sutil */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4FF00]/[0.02] rounded-full blur-3xl" />
       </div>
 
-      {/* Header */}
       <div className="flex items-center justify-between px-5 pt-5 mb-4 relative z-10">
         <h2 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">
           <TrendingUp size={22} className="text-[#D4FF00]" />
@@ -302,7 +330,7 @@ export default function EvolutionView({ activeProfile }) {
         )}
       </div>
 
-      {/* Contenido gráfico con scroll */}
+      {/* Contenido gráfico */}
       <div className="flex-1 overflow-y-auto px-5 pb-safe space-y-6 relative z-10">
         {loading ? (
           <div className="flex items-center justify-center py-10 text-zinc-500 text-sm">Cargando...</div>
@@ -316,7 +344,6 @@ export default function EvolutionView({ activeProfile }) {
           </div>
         ) : (
           <>
-            {/* Volumen semanal */}
             {weeklyVolume.length > 0 && (
               <div className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-5 animate-fade-in-up">
                 <h3 className="text-[11px] font-semibold text-zinc-400 mb-5 text-center uppercase tracking-wider">
@@ -326,7 +353,6 @@ export default function EvolutionView({ activeProfile }) {
               </div>
             )}
 
-            {/* Frecuencia semanal */}
             {weeklyFrequency.length > 0 && (
               <div className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-5 animate-fade-in-up">
                 <h3 className="text-[11px] font-semibold text-zinc-400 mb-5 text-center uppercase tracking-wider">
@@ -336,7 +362,6 @@ export default function EvolutionView({ activeProfile }) {
               </div>
             )}
 
-            {/* Peso corporal */}
             {weightLogs.length > 0 && (
               <div className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-5 animate-fade-in-up">
                 <h3 className="text-[11px] font-semibold text-zinc-400 mb-5 text-center uppercase tracking-wider">
@@ -346,15 +371,14 @@ export default function EvolutionView({ activeProfile }) {
                   <LineChart data={weightData} maxValue={maxWeight} color="#F472B6" width={320} height={140} />
                 ) : (
                   <div className="flex flex-col items-center gap-2">
-                    <p className="text-2xl font-bold text-white">{weightData[0].value} kg</p>
-                    <p className="text-xs text-zinc-500">{weightData[0].label}</p>
+                    <p className="text-2xl font-bold text-white">{weightData[0]?.value ?? 0} kg</p>
+                    <p className="text-xs text-zinc-500">{weightData[0]?.label ?? ''}</p>
                     <p className="text-[10px] text-zinc-600">Añade otro registro para ver la gráfica</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Medidas corporales */}
             {measuresHistory.length > 0 && (
               <div className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-5 animate-fade-in-up">
                 <h3 className="text-[11px] font-semibold text-zinc-400 mb-5 text-center uppercase tracking-wider flex items-center justify-center gap-1.5">
@@ -367,7 +391,9 @@ export default function EvolutionView({ activeProfile }) {
                       {measure.data.length > 1 ? (
                         <LineChart data={measure.data} maxValue={measure.maxVal} color={measure.color} width={320} height={100} />
                       ) : (
-                        <div className="text-center text-sm text-white">{measure.data[0].value} cm</div>
+                        <div className="text-center text-sm text-white">
+                          {measure.data[0]?.value ?? 0} cm
+                        </div>
                       )}
                     </div>
                   ))}
@@ -375,7 +401,6 @@ export default function EvolutionView({ activeProfile }) {
               </div>
             )}
 
-            {/* Mejores marcas personales */}
             {topExercises.length > 0 && (
               <div className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-2xl p-5 animate-fade-in-up">
                 <h3 className="text-[11px] font-semibold text-zinc-400 mb-5 text-center uppercase tracking-wider flex items-center justify-center gap-1.5">

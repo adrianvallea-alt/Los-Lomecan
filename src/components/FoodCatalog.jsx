@@ -9,14 +9,11 @@ export default function FoodCatalog({ onAddToDay }) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedFood, setSelectedFood] = useState(null);
-  
   const [selectedPortion, setSelectedPortion] = useState(null);
   const [quantity, setQuantity] = useState(1);
-
   const [showScanner, setShowScanner] = useState(false);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [editingFood, setEditingFood] = useState(null);
-
   const [customName, setCustomName] = useState('');
   const [customBrand, setCustomBrand] = useState('');
   const [customCal, setCustomCal] = useState('');
@@ -25,44 +22,99 @@ export default function FoodCatalog({ onAddToDay }) {
   const [customFat, setCustomFat] = useState('');
   const [customBarcode, setCustomBarcode] = useState('');
 
-  // Carga inicial de alimentos
-  useEffect(() => {
-    const loadFoods = async () => {
-      setLoading(true);
-      const { data } = await supabase.from('foods').select('*').order('name').limit(200);
-      setFoods(data || []);
-      setLoading(false);
-    };
-    loadFoods();
-  }, []);
-
-  // Búsqueda reactiva (Debounce de 300ms)
-  useEffect(() => {
-    if (search.trim().length < 1) {
-      const loadAll = async () => {
-        setLoading(true);
-        const { data } = await supabase.from('foods').select('*').order('name').limit(200);
-        setFoods(data || []);
+  // ========== CARGAR ALIMENTOS CON CACHÉ ==========
+  const loadAllFoods = async () => {
+    setLoading(true);
+    try {
+      if (!navigator.onLine) {
+        const cached = localStorage.getItem('foodsCache');
+        if (cached) setFoods(JSON.parse(cached));
+        else setFoods([]);
         setLoading(false);
-      };
-      loadAll();
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      const { data } = await supabase
+        return;
+      }
+
+      const { data, error } = await supabase
         .from('foods')
         .select('*')
-        .ilike('name', `%${search}%`)
         .order('name')
-        .limit(30);
-      setFoods(data || []);
+        .limit(200);
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setFoods(data);
+        localStorage.setItem('foodsCache', JSON.stringify(data));
+      } else {
+        setFoods([]);
+      }
+    } catch (err) {
+      console.warn('⚠️ Error cargando alimentos, usando caché:', err);
+      const cached = localStorage.getItem('foodsCache');
+      if (cached) setFoods(JSON.parse(cached));
+      else setFoods([]);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAllFoods();
+  }, []);
+
+  // ========== BÚSQUEDA CON DEBOUNCE Y CACHÉ ==========
+  useEffect(() => {
+    if (search.trim().length < 1) {
+      loadAllFoods();
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+
+      if (!navigator.onLine) {
+        const cached = localStorage.getItem('foodsCache');
+        if (cached) {
+          const all = JSON.parse(cached);
+          const filtered = all.filter(f =>
+            f.name.toLowerCase().includes(search.toLowerCase())
+          );
+          setFoods(filtered);
+        } else {
+          setFoods([]);
+        }
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('foods')
+          .select('*')
+          .ilike('name', `%${search}%`)
+          .order('name')
+          .limit(30);
+        if (error) throw error;
+        setFoods(data || []);
+      } catch (err) {
+        console.warn('⚠️ Error en búsqueda, usando caché:', err);
+        const cached = localStorage.getItem('foodsCache');
+        if (cached) {
+          const all = JSON.parse(cached);
+          setFoods(all.filter(f =>
+            f.name.toLowerCase().includes(search.toLowerCase())
+          ));
+        } else {
+          setFoods([]);
+        }
+      } finally {
+        setLoading(false);
+      }
     }, 300);
+
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Auto-calcular calorías cuando cambian los macros en el formulario de creación/edición
+  // ========== AUTO-CALCULAR CALORÍAS ==========
   useEffect(() => {
     if (customPro || customCarb || customFat) {
       const pro = parseFloat(customPro) || 0;
@@ -73,6 +125,7 @@ export default function FoodCatalog({ onAddToDay }) {
     }
   }, [customPro, customCarb, customFat]);
 
+  // ========== MANEJADORES ==========
   const handleSelectFood = (food) => {
     setSelectedFood(food);
     if (food.portions && food.portions.length > 0) {
@@ -86,16 +139,27 @@ export default function FoodCatalog({ onAddToDay }) {
   const handleBarcode = async (code) => {
     setShowScanner(false);
     setLoading(true);
-    const { data: cached } = await supabase.from('foods').select('*').eq('barcode', code).single();
-    if (cached) {
-      handleSelectFood(cached);
-      setLoading(false);
-      return;
-    }
+    try {
+      const { data: cached } = await supabase
+        .from('foods')
+        .select('*')
+        .eq('barcode', code)
+        .single();
+      if (cached) {
+        handleSelectFood(cached);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {}
+
     try {
       const remote = await getFoodByBarcode(code);
       if (remote) {
-        const { data: saved } = await supabase.from('foods').insert([remote]).select().single();
+        const { data: saved } = await supabase
+          .from('foods')
+          .insert([remote])
+          .select()
+          .single();
         handleSelectFood(saved || remote);
         setLoading(false);
         return;
@@ -103,6 +167,7 @@ export default function FoodCatalog({ onAddToDay }) {
     } catch (e) {
       console.log('Open Food Facts no disponible');
     }
+
     setLoading(false);
     const create = window.confirm('Producto no encontrado. ¿Deseas crear un alimento con este código de barras?');
     if (create) {
@@ -167,7 +232,12 @@ export default function FoodCatalog({ onAddToDay }) {
     };
 
     if (editingFood) {
-      const { data } = await supabase.from('foods').update(foodData).eq('id', editingFood.id).select().single();
+      const { data } = await supabase
+        .from('foods')
+        .update(foodData)
+        .eq('id', editingFood.id)
+        .select()
+        .single();
       if (data) {
         setFoods(prev => prev.map(f => f.id === editingFood.id ? data : f));
         setSelectedFood(data);
@@ -180,10 +250,21 @@ export default function FoodCatalog({ onAddToDay }) {
         barcode: customBarcode || `custom_${Date.now()}`,
         portions: [{ name: "100g", grams: 100 }]
       };
-      const { data } = await supabase.from('foods').insert([newFood]).select().single();
+      const { data } = await supabase
+        .from('foods')
+        .insert([newFood])
+        .select()
+        .single();
       const finalFood = data || newFood;
       setFoods(prev => [finalFood, ...prev]);
       handleSelectFood(finalFood);
+      // Actualizar caché
+      const cached = localStorage.getItem('foodsCache');
+      if (cached) {
+        const arr = JSON.parse(cached);
+        arr.unshift(finalFood);
+        localStorage.setItem('foodsCache', JSON.stringify(arr));
+      }
     }
 
     clearCustomForm();
@@ -194,27 +275,29 @@ export default function FoodCatalog({ onAddToDay }) {
     return (baseValue / selectedFood.base_g) * selectedPortion.grams * quantity;
   };
 
+  // ========== RENDERIZADO ==========
   return (
     <div className="flex-1 flex flex-col relative overflow-y-auto pb-32">
-      {/* Luces de Fondo Estilizadas */}
+      {/* Luces de fondo estilizadas */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-pastel-blue/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-32 h-32 bg-pastel-green/5 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none" />
 
       <div className="relative z-10 p-4 space-y-5">
+        {/* Cabecera */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles size={20} className="text-[#d4ff00]" />
             <h2 className="text-xl font-bold text-white">Alimentos</h2>
           </div>
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => { setEditingFood(null); setShowCustomForm(true); }} 
+            <button
+              onClick={() => { setEditingFood(null); setShowCustomForm(true); }}
               className="p-2.5 rounded-full bg-stone-900 border border-white/10 text-stone-400 hover:text-white active:scale-90 transition-transform"
             >
               <Plus size={18} />
             </button>
-            <button 
-              onClick={() => setShowScanner(true)} 
+            <button
+              onClick={() => setShowScanner(true)}
               className="p-2.5 rounded-full bg-stone-900 border border-white/10 text-stone-400 hover:text-white active:scale-90 transition-transform"
             >
               <Barcode size={18} />
@@ -234,183 +317,131 @@ export default function FoodCatalog({ onAddToDay }) {
           />
         </div>
 
+        {/* Indicador de carga */}
         {loading && (
           <div className="flex items-center justify-center py-6 text-stone-400 text-xs font-mono tracking-widest uppercase">
             Buscando alimentos...
           </div>
         )}
 
-        {/* Listado de Alimentos */}
+        {/* Listado de alimentos */}
         <div className="space-y-2">
-          {foods.map(food => (
-            <div key={food.id || food.barcode} className="relative w-full">
-              {/* Contenedor principal de la tarjeta */}
-              <div
-                className={`w-full bg-stone-900/40 backdrop-blur-md border rounded-2xl p-4 flex items-center justify-between gap-4 transition-all ${
-                  selectedFood?.id === food.id || selectedFood?.barcode === food.barcode
-                    ? 'border-[#d4ff00] bg-[#d4ff00]/5 shadow-md shadow-[#d4ff00]/5'
-                    : 'border-white/[0.06]'
-                }`}
-              >
-                {/* 1. Botón de Selección (Cubre el área de clic principal para abrir porciones) */}
-                <button
-                  onClick={() => handleSelectFood(food)}
-                  className="flex-1 text-left min-w-0 active:scale-[0.99] transition-transform"
+          {foods.length === 0 && !loading ? (
+            <p className="text-center text-stone-500 text-sm py-6">
+              No hay alimentos disponibles. Prueba a crear uno nuevo.
+            </p>
+          ) : (
+            foods.map(food => (
+              <div key={food.id || food.barcode} className="relative w-full">
+                <div
+                  className={`w-full bg-stone-900/40 backdrop-blur-md border rounded-2xl p-4 flex items-center justify-between gap-4 transition-all ${
+                    selectedFood?.id === food.id || selectedFood?.barcode === food.barcode
+                      ? 'border-[#d4ff00] bg-[#d4ff00]/5 shadow-md shadow-[#d4ff00]/5'
+                      : 'border-white/[0.06]'
+                  }`}
                 >
-                  <p className="text-white text-sm font-bold tracking-tight truncate pr-2">
-                    {food.name}
-                  </p>
-                  
-                  {/* Macros del alimento */}
-                  <p className="text-[10px] text-stone-400 mt-1 font-mono truncate">
-                    {food.brand && `${food.brand} · `}{food.cal} kcal | P: {food.pro}g | C: {food.carb}g | G: {food.fat}g
-                  </p>
-
-                  {/* Etiqueta de gramos de la porción base colocada abajo libre de interferencias */}
-                  <p className="text-[10px] text-stone-500 font-mono mt-1">
-                    {food.base_g}g
-                  </p>
-                </button>
-
-                {/* 2. Botón de edición alineado independientemente en el flujo de la derecha */}
-                <div className="shrink-0">
                   <button
-                    onClick={(e) => { 
-                      e.preventDefault();
-                      e.stopPropagation(); 
-                      handleEditFood(food); 
-                    }}
-                    className="p-2.5 rounded-xl bg-stone-950 border border-white/10 text-stone-400 hover:text-white hover:border-white/20 active:scale-95 transition-all shadow-lg flex items-center justify-center"
-                    aria-label="Editar alimento"
+                    onClick={() => handleSelectFood(food)}
+                    className="flex-1 text-left min-w-0 active:scale-[0.99] transition-transform"
                   >
-                    <Edit3 size={14} />
+                    <p className="text-white text-sm font-bold tracking-tight truncate pr-2">
+                      {food.name}
+                    </p>
+                    <p className="text-[10px] text-stone-400 mt-1 font-mono truncate">
+                      {food.brand && `${food.brand} · `}{food.cal} kcal | P: {food.pro}g | C: {food.carb}g | G: {food.fat}g
+                    </p>
+                    <p className="text-[10px] text-stone-500 font-mono mt-1">
+                      {food.base_g}g
+                    </p>
                   </button>
+                  <div className="shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleEditFood(food);
+                      }}
+                      className="p-2.5 rounded-xl bg-stone-950 border border-white/10 text-stone-400 hover:text-white hover:border-white/20 active:scale-95 transition-all shadow-lg flex items-center justify-center"
+                      aria-label="Editar alimento"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
-      {/* MODAL: REGISTRAR PORCIÓN/CANTIDAD */}
-      {selectedFood && selectedPortion && (
-        <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full sm:max-w-md bg-stone-900 border border-white/10 rounded-[2rem] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-white font-black text-lg leading-tight">{selectedFood.name}</p>
-                {selectedFood.brand && <p className="text-xs font-mono text-stone-400 mt-0.5">{selectedFood.brand}</p>}
-              </div>
-              <button 
-                onClick={() => setSelectedFood(null)} 
-                className="text-stone-400 hover:text-white p-1 bg-stone-950 rounded-full border border-white/5 transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-stone-400 font-bold tracking-wider uppercase font-mono">Unidad / Porción</label>
-                <select 
-                  value={JSON.stringify(selectedPortion)} 
-                  onChange={(e) => setSelectedPortion(JSON.parse(e.target.value))}
-                  className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-[#d4ff00] outline-none"
-                >
-                  {selectedFood.portions && selectedFood.portions.length > 0 ? (
-                    selectedFood.portions.map((p, idx) => (
-                      <option key={idx} value={JSON.stringify(p)}>
-                        {p.name} ({p.grams}g)
-                      </option>
-                    ))
-                  ) : (
-                    <option value={JSON.stringify({ name: `Porción base`, grams: selectedFood.base_g })}>
-                      Porción base ({selectedFood.base_g}g)
-                    </option>
-                  )}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between bg-stone-950 border border-white/[0.04] p-3.5 rounded-xl">
-                <span className="text-xs text-stone-300 font-bold font-mono uppercase tracking-wider">Cantidad</span>
-                <input 
-                  type="number" 
-                  step="0.1"
-                  min="0.1"
-                  value={quantity} 
-                  onChange={(e) => setQuantity(Math.max(0.1, parseFloat(e.target.value) || 0))} 
-                  className="w-24 bg-stone-900 border border-white/10 rounded-lg p-2 text-center text-white text-sm font-bold focus:border-[#d4ff00] outline-none" 
-                />
-              </div>
-            </div>
-
-            <div className="text-right text-[10px] text-stone-400 font-mono tracking-wider">
-              Total medido: <span className="text-[#d4ff00] font-bold">{(selectedPortion.grams * quantity).toFixed(0)}g</span>
-            </div>
-
-            {/* Panel de vista previa de macros */}
-            <div className="bg-stone-950 border border-white/[0.03] rounded-2xl p-4 grid grid-cols-2 gap-y-2 gap-x-4 text-xs font-mono">
-              <div className="text-stone-400">Calorías</div>
-              <div className="text-white font-bold text-right">{calculateMacro(selectedFood.cal).toFixed(0)} kcal</div>
-              <div className="text-stone-400">Proteínas</div>
-              <div className="text-white font-bold text-right">{calculateMacro(selectedFood.pro).toFixed(1)} g</div>
-              <div className="text-stone-400">Carbohidratos</div>
-              <div className="text-white font-bold text-right">{calculateMacro(selectedFood.carb).toFixed(1)} g</div>
-              <div className="text-stone-400">Grasas</div>
-              <div className="text-white font-bold text-right">{calculateMacro(selectedFood.fat).toFixed(1)} g</div>
-            </div>
-
-            <button 
-              onClick={handleAdd} 
-              className="w-full bg-[#d4ff00] text-stone-950 font-black py-3.5 rounded-xl flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] transition-all uppercase tracking-widest text-xs"
-            >
-              <Plus size={14} strokeWidth={3} /> Añadir al día
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: NUEVO / EDITAR ALIMENTO */}
+      {/* ========== MODAL NUEVO/EDITAR ALIMENTO (CORREGIDO) ========== */}
       {showCustomForm && (
-        <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full sm:max-w-md bg-stone-900 border border-white/10 rounded-[2rem] p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-stone-900 border border-white/10 rounded-3xl p-5 space-y-4 shadow-2xl max-h-[95vh] overflow-y-auto overflow-x-hidden">
             <h3 className="text-white font-black text-base uppercase tracking-wider font-mono">
               {editingFood ? '⚙️ Editar Alimento' : '✨ Nuevo Alimento (Base 100g)'}
             </h3>
-            
+
             <div className="space-y-3">
-              <input 
-                type="text" 
-                value={customName} 
-                onChange={(e) => setCustomName(e.target.value)} 
-                placeholder="Nombre del alimento" 
-                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none" 
+              <input
+                type="text"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="Nombre del alimento"
+                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
               />
-              <input 
-                type="text" 
-                value={customBrand} 
-                onChange={(e) => setCustomBrand(e.target.value)} 
-                placeholder="Marca (opcional)" 
-                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none" 
+              <input
+                type="text"
+                value={customBrand}
+                onChange={(e) => setCustomBrand(e.target.value)}
+                placeholder="Marca (opcional)"
+                className="w-full bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
               />
-              
-              <div className="grid grid-cols-2 gap-3.5">
-                <div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="min-w-0">
                   <label className="text-[10px] text-stone-400 font-bold uppercase font-mono tracking-wider">Proteínas (g)</label>
-                  <input type="number" step="0.1" value={customPro} onChange={(e) => setCustomPro(e.target.value)} className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    value={customPro}
+                    onChange={(e) => setCustomPro(e.target.value)}
+                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                  />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-[10px] text-stone-400 font-bold uppercase font-mono tracking-wider">Carbohidratos (g)</label>
-                  <input type="number" step="0.1" value={customCarb} onChange={(e) => setCustomCarb(e.target.value)} className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    value={customCarb}
+                    onChange={(e) => setCustomCarb(e.target.value)}
+                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                  />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-[10px] text-stone-400 font-bold uppercase font-mono tracking-wider">Grasas (g)</label>
-                  <input type="number" step="0.1" value={customFat} onChange={(e) => setCustomFat(e.target.value)} className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none" />
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    value={customFat}
+                    onChange={(e) => setCustomFat(e.target.value)}
+                    className="w-full mt-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                  />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-[10px] text-stone-400 font-bold uppercase font-mono tracking-wider">Calorías (kcal)</label>
                   <div className="flex gap-1.5 mt-1">
-                    <input type="number" value={customCal} onChange={(e) => setCustomCal(e.target.value)} className="flex-1 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none" />
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={customCal}
+                      onChange={(e) => setCustomCal(e.target.value)}
+                      className="flex-1 min-w-0 bg-stone-950 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#d4ff00] outline-none"
+                    />
                     <button
                       type="button"
                       onClick={calculateCaloriesFromMacros}
@@ -429,16 +460,16 @@ export default function FoodCatalog({ onAddToDay }) {
                 EAN/CÓDIGO: {customBarcode}
               </div>
             )}
-            
+
             <div className="flex gap-3 pt-2">
-              <button 
-                onClick={handleSaveCustomFood} 
+              <button
+                onClick={handleSaveCustomFood}
                 className="flex-1 bg-[#d4ff00] text-stone-950 font-black py-3 rounded-xl flex items-center justify-center gap-1.5 hover:brightness-110 active:scale-95 transition-all uppercase tracking-wider text-xs"
               >
                 <Save size={14} /> {editingFood ? 'Actualizar' : 'Guardar'}
               </button>
-              <button 
-                onClick={clearCustomForm} 
+              <button
+                onClick={clearCustomForm}
                 className="px-5 py-3 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider text-stone-400 hover:text-white transition-colors"
               >
                 Cancelar
@@ -448,7 +479,10 @@ export default function FoodCatalog({ onAddToDay }) {
         </div>
       )}
 
-      {showScanner && <BarcodeScanner onDetected={handleBarcode} onClose={() => setShowScanner(false)} />}
+      {/* Escáner de código de barras */}
+      {showScanner && (
+        <BarcodeScanner onDetected={handleBarcode} onClose={() => setShowScanner(false)} />
+      )}
     </div>
   );
 }

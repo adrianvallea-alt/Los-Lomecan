@@ -11,16 +11,14 @@ import IntroScreen from './components/IntroScreen';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
 import { Edit3, Users, Lock } from 'lucide-react';
-import { 
-  fetchProfiles, 
-  fetchUserRoutines, 
-  fetchAllGlobalRoutines,
+import {
+  fetchProfiles,
+  fetchUserRoutines,
   saveUserRoutine,
   deleteUserRoutine,
-  importRoutineToProfile,
-  fetchDailyIntake, 
-  addDailyIntakeItem, 
-  updateProfile 
+  fetchDailyIntake,
+  addDailyIntakeItem,
+  updateProfile
 } from './lib/dataService';
 import useReminders from './hooks/useReminders';
 import useOfflineQueue from './hooks/useOfflineQueue';
@@ -54,6 +52,19 @@ export default function App() {
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
 
+  // ========== EVITAR PULL-TO-REFRESH ==========
+  useEffect(() => {
+    // Solo como refuerzo para navegadores antiguos que no soporten overscroll-behavior
+    const preventPullToRefresh = (e) => {
+      // No bloqueamos el scroll normal, solo evitamos el gesto de recarga si hay un toque en la parte superior
+      if (window.scrollY === 0 && e.touches && e.touches[0] && e.touches[0].clientY > 0) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
+    return () => document.removeEventListener('touchmove', preventPullToRefresh);
+  }, []);
+
   // ========== CARGAR PERFILES ==========
   useEffect(() => {
     const loadProfiles = async () => {
@@ -77,7 +88,6 @@ export default function App() {
     loadProfiles();
   }, []);
 
-  // Guardar perfiles en localStorage
   useEffect(() => {
     if (profiles.length > 0) localStorage.setItem('userProfiles', JSON.stringify(uniqueById(profiles)));
   }, [profiles]);
@@ -87,12 +97,10 @@ export default function App() {
     if (!profileId) return [];
     try {
       const routines = await fetchUserRoutines(profileId);
-      // Guardar en caché local
       localStorage.setItem(`userRoutines_${profileId}`, JSON.stringify(routines));
       return routines;
     } catch (err) {
       console.error('Error cargando rutinas desde Supabase:', err);
-      // Fallback a caché local
       const cached = localStorage.getItem(`userRoutines_${profileId}`);
       return cached ? JSON.parse(cached) : [];
     }
@@ -132,44 +140,25 @@ export default function App() {
   const updateRoutines = async (newRoutines) => {
     setRoutines(newRoutines);
     if (activeProfile) {
-      // Guardar en caché local
       localStorage.setItem(`userRoutines_${activeProfile.id}`, JSON.stringify(newRoutines));
-      
-      // Guardar cada rutina en Supabase
       for (const routine of newRoutines) {
         try {
           await saveUserRoutine(activeProfile.id, routine);
         } catch (err) {
           console.error('Error guardando rutina:', routine.name, err);
-          // Si falla, añadir a la cola de offline
           addToQueue('saveRoutine', { profileId: activeProfile.id, routine });
         }
       }
-      
-      // Limpiar rutinas que ya no existen en la lista
       const existingIds = new Set(newRoutines.map(r => r.id));
       for (const routine of routines) {
         if (!existingIds.has(routine.id)) {
           try {
-            await deleteUserRoutine(activeProfile.id, routine.id);
+            await deleteUserRoutine(activeProfile.id, routine.id, false);
           } catch (err) {
             console.error('Error eliminando rutina:', routine.name, err);
           }
         }
       }
-    }
-  };
-
-  const importRoutine = async (routineId) => {
-    if (!activeProfile) return;
-    try {
-      await importRoutineToProfile(activeProfile.id, routineId);
-      // Recargar rutinas
-      const updated = await loadRoutines(activeProfile.id);
-      setRoutines(updated);
-    } catch (err) {
-      console.error('Error importando rutina:', err);
-      alert('No se pudo importar la rutina. Intenta de nuevo.');
     }
   };
 
@@ -250,9 +239,7 @@ export default function App() {
   };
 
   // ========== RENDERIZADO ==========
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-  const currentRoutine = routines.find(r => r.month === currentMonth && r.year === currentYear);
+  const currentRoutine = routines.find(r => r.is_active === true);
   const pendingWorkout = !!currentRoutine;
 
   if (loading) {
@@ -326,16 +313,15 @@ export default function App() {
         );
       case 'alimentos':
         return <FoodCatalog onAddToDay={addFoodToDay} />;
-            case 'gimnasio':
+      case 'gimnasio':
         return (
           <GymTracker
-            activeProfile={activeProfile}      // ✅ Importante: Recibe el perfil activo
-            routines={routines}                // ✅ Las rutinas
-            onUpdateRoutines={updateRoutines}  // ✅ Función para actualizar
+            activeProfile={activeProfile}
+            routines={routines}
+            onUpdateRoutines={updateRoutines}
             openLibrary={openLibrary}
             onLibraryOpened={() => setOpenLibrary(false)}
             addToQueue={addToQueue}
-            onImportRoutine={importRoutine}    // ✅ Esta prop la usa el código complejo
           />
         );
       case 'evolucion':
@@ -402,7 +388,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto pt-4 flex flex-col">
+        <div className="flex-1 overflow-y-auto pt-4 flex flex-col overscroll-none">
           {renderContent()}
         </div>
 

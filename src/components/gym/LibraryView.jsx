@@ -7,7 +7,6 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import ExerciseForm from './ExerciseForm';
 
-// Paleta de músculos alineada con la marca (acentos sobre fondo oscuro)
 const MUSCLE_STYLES = {
   'pecho': 'text-[#D4FF00] bg-[#D4FF00]/10 border-[#D4FF00]/20',
   'espalda': 'text-zinc-300 bg-white/[0.05] border-white/[0.08]',
@@ -19,7 +18,6 @@ const MUSCLE_STYLES = {
 };
 
 export default function LibraryView({ password, onSetPassword, onBack }) {
-  // --- TODA LA LÓGICA PERMANECE EXACTAMENTE IGUAL ---
   const [exercises, setExercises] = useState([]);
   const [editingExercise, setEditingExercise] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -29,19 +27,28 @@ export default function LibraryView({ password, onSetPassword, onBack }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [search, setSearch] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [newPass, setNewPass] = useState('');
 
   const loadExercises = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('exercises').select('*').order('name');
-    if (!error) setExercises(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('exercises').select('*').order('name');
+      if (error) throw error;
+      setExercises(data || []);
+      localStorage.setItem('exercisesCache', JSON.stringify(data || []));
+    } catch (err) {
+      console.warn('Error cargando ejercicios, usando caché:', err);
+      const cached = localStorage.getItem('exercisesCache');
+      if (cached) setExercises(JSON.parse(cached));
+      else setExercises([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadExercises(); }, []);
 
-  // Pantalla de creación de contraseña rediseñada
   if (passwordForm) {
-    const [newPass, setNewPass] = useState('');
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 safe-top safe-bottom animate-fade-in bg-[#09090B]">
         <div className="w-20 h-20 rounded-2xl bg-[#D4FF00]/5 border border-[#D4FF00]/20 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,255,0,0.1)]">
@@ -186,8 +193,17 @@ export default function LibraryView({ password, onSetPassword, onBack }) {
         </div>
       </div>
 
-      {/* Lista de ejercicios */}
-      <div className="flex-1 overflow-y-auto px-5 pb-safe space-y-2.5">
+      {/* Lista de ejercicios con scroll optimizado y espacio inferior amplio */}
+      <div 
+        className="flex-1 overflow-y-auto px-5 space-y-2.5 
+                   [scrollbar-width:thin] [scrollbar-color:#D4FF00_transparent] 
+                   overscroll-behavior-contain"
+        style={{
+          scrollbarGutter: 'stable',
+          scrollbarColor: '#D4FF00 transparent',
+          paddingBottom: 'calc(env(safe-area-inset-bottom) + 160px)', // ✅ Aumenta espacio inferior
+        }}
+      >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="w-10 h-10 border-2 border-[#D4FF00]/20 border-t-[#D4FF00] rounded-full animate-spin mb-4" />
@@ -266,7 +282,7 @@ export default function LibraryView({ password, onSetPassword, onBack }) {
         )}
       </div>
 
-      {/* MODAL DEL FORMULARIO (PORTAL) con estética Quiet Premium */}
+      {/* MODAL DEL FORMULARIO */}
       {showForm &&
         ReactDOM.createPortal(
           <div 
@@ -305,7 +321,7 @@ export default function LibraryView({ password, onSetPassword, onBack }) {
         )
       }
 
-      {/* MODAL DE CONFIRMACIÓN (PORTAL) con estética Quiet Premium */}
+      {/* MODAL DE CONFIRMACIÓN */}
       {confirmDelete &&
         ReactDOM.createPortal(
           <div 

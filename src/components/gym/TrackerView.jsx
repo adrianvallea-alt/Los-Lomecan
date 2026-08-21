@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Dumbbell, Award, Clock, Star, Timer, Pause, Play, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { Check, Award, Info, Timer, Pause, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import ExerciseDetailModal from './ExerciseDetailModal';
 import { getLastSetData } from '../../utils/gymHelpers';
+import { fetchAllExercises } from '../../lib/dataService';
 
 export default function TrackerView({
   routineData,
@@ -15,12 +16,11 @@ export default function TrackerView({
   onGoBack
 }) {
   const [exercises, setExercises] = useState(() => {
-    // Inicializar ejercicios con repsDone para cada set
     return routineData.exercises.map(ex => ({
       ...ex,
       sets: ex.sets.map(s => ({
         ...s,
-        repsDone: '' // Campo para el número real de repeticiones que el usuario hará
+        repsDone: ''
       }))
     }));
   });
@@ -28,17 +28,24 @@ export default function TrackerView({
   const [restTimer, setRestTimer] = useState({ active: false, seconds: 90, running: false });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [detailExercise, setDetailExercise] = useState(null);
+  const [libraryExercises, setLibraryExercises] = useState([]);
   const timerRef = useRef(null);
   const DRAFT_KEY = `draft_${activeRoutine.id}_${activeDayIndex}`;
   const exerciseRefs = useRef({});
 
-  // Cargar borrador (asegurando que tenga repsDone)
+  // Cargar ejercicios de la librería para enriquecer
+  useEffect(() => {
+    fetchAllExercises()
+      .then(data => setLibraryExercises(data))
+      .catch(err => console.error('Error cargando ejercicios de librería:', err));
+  }, []);
+
+  // Cargar borrador
   useEffect(() => {
     const saved = localStorage.getItem(DRAFT_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Asegurar que cada set tenga repsDone
         const withRepsDone = parsed.map(ex => ({
           ...ex,
           sets: ex.sets.map(s => ({
@@ -196,38 +203,37 @@ export default function TrackerView({
               ref={el => (exerciseRefs.current[ex.id] = el)}
               className="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden transition-all"
             >
-              <button
+              <div
                 onClick={() => toggleExpand(ex.id)}
-                className="w-full p-4 text-left flex items-center justify-between active:scale-[0.99] transition-all"
+                className="w-full p-4 text-left flex items-center justify-between active:scale-[0.99] transition-all cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpand(ex.id); }}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    {/* ==================================================== */}
-                    {/* 🔥 AQUÍ ESTÁ EL BOTÓN CON TOOLTIP QUE FALTABA 🔥 */}
-                    {/* ==================================================== */}
                     <h3 className="text-white font-semibold text-sm truncate">{ex.name}</h3>
-                    
                     <button
-                      onClick={(e) => { 
-                        e.stopPropagation(); // Evita expandir la tarjeta al hacer clic en el ojo
-                        setDetailExercise(ex); 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const matched = libraryExercises.find(
+                          libEx => libEx.name.toLowerCase() === ex.name.toLowerCase()
+                        ) || libraryExercises.find(
+                          libEx => libEx.id === ex.libraryExerciseId
+                        );
+                        const enrichedExercise = matched ? { ...ex, ...matched } : ex;
+                        setDetailExercise(enrichedExercise);
                       }}
-                      className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-[#D4FF00] hover:border-[#D4FF00]/30 transition-colors relative group ml-1"
-                      title="Ver guía y video" // Tooltip nativo del navegador
+                      className="p-1 rounded-full text-zinc-500 hover:text-[#D4FF00] hover:bg-white/[0.05] transition-colors"
+                      title="Ver detalle del ejercicio"
                     >
-                      <Eye size={14} />
-                      {/* Tooltip personalizado visualmente bonito */}
-                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-[#09090B] border border-white/[0.08] text-[10px] text-zinc-300 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
-                        Ver guía y video
-                      </span>
+                      <Info size={14} />
                     </button>
-                    {/* ==================================================== */}
-
                     {completedSets === totalSets && totalSets > 0 && (
                       <Check size={14} className="text-[#D4FF00] flex-shrink-0" />
                     )}
                   </div>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">{ex.muscle} · {totalSets} series</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">{ex.muscle || ''} · {totalSets} series</p>
                   {record && (
                     <div className="flex items-center gap-1 mt-1 text-[10px] text-zinc-600">
                       <Award size={10} className="text-[#D4FF00]" />
@@ -239,7 +245,7 @@ export default function TrackerView({
                   <span className="text-[10px] text-zinc-500">{completedSets}/{totalSets}</span>
                   {isExpanded ? <ChevronUp size={16} className="text-zinc-500" /> : <ChevronDown size={16} className="text-zinc-500" />}
                 </div>
-              </button>
+              </div>
 
               <div className="px-4 pb-1">
                 <div className="w-full bg-white/[0.05] rounded-full h-1.5 overflow-hidden">
@@ -351,7 +357,7 @@ export default function TrackerView({
         </div>
       )}
 
-      {/* 🎬 Renderizado del modal al final del componente */}
+      {/* Modal de detalle del ejercicio */}
       {detailExercise && <ExerciseDetailModal exercise={detailExercise} onClose={() => setDetailExercise(null)} />}
 
       <style>{`
@@ -368,4 +374,4 @@ export default function TrackerView({
       `}</style>
     </div>
   );
-      }
+}
