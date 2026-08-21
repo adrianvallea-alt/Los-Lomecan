@@ -78,7 +78,7 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
   };
 
   return (
-    <div className="min-h-screen bg-[#09090B] flex flex-col justify-between py-10 px-6 select-none relative overflow-hidden">
+    <div className="min-h-screen bg-[#09090B] flex flex-col justify-between py-10 px-6 select-none relative overflow-hidden no-scrollbar">
       {/* Luces ambientales neón */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-[#D4FF00]/[0.03] rounded-full blur-[140px]" />
@@ -124,20 +124,17 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
                 >
                   {/* Avatar */}
                   <div className="relative w-24 h-24 mb-4">
-                    {/* Glow de color dinámico */}
                     <div 
                       className="absolute inset-0 rounded-full blur-xl opacity-40 transition-opacity duration-300 group-hover:opacity-70 animate-pulse-slow"
                       style={{ backgroundColor: hexColor }}
                     />
                     
-                    {/* Marco base (redondo) */}
                     <div className={`absolute inset-0 rounded-full border-2 transition-all duration-300 ${
                       isDicebear
                         ? 'border-[#D4FF00]/60 shadow-[0_0_25px_rgba(212,255,0,0.4)]'
                         : 'border-white/10 group-hover:border-[#D4FF00]/50 group-hover:shadow-[0_0_20px_rgba(212,255,0,0.25)]'
                     }`} />
                     
-                    {/* Imagen o emoji */}
                     <div
                       className={`absolute inset-[6px] rounded-full flex items-center justify-center text-2xl font-bold overflow-hidden transition-transform duration-300 group-hover:scale-[1.05] ${profile.color}`}
                     >
@@ -150,14 +147,12 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
                       )}
                     </div>
 
-                    {/* Indicador de PIN */}
                     {profile.pin && (
                       <div className="absolute -top-1 -left-1 w-7 h-7 bg-zinc-900 border border-[#D4FF00]/40 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(212,255,0,0.3)] backdrop-blur-sm">
                         <Lock size={12} className="text-[#D4FF00]" />
                       </div>
                     )}
 
-                    {/* Badge de avatar IA (DiceBear) */}
                     {isDicebear && (
                       <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#D4FF00]/20 border border-[#D4FF00]/60 rounded-full flex items-center justify-center shadow-[0_0_12px_rgba(212,255,0,0.5)]">
                         <Sparkles size={12} className="text-[#D4FF00]" />

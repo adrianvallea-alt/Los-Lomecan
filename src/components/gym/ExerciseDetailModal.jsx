@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { X, AlertTriangle, Info, Video } from 'lucide-react';
+import { X, AlertTriangle, WifiOff } from 'lucide-react';
 
 const getYouTubeId = (url) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -35,18 +35,15 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
         className="w-full sm:max-w-lg bg-[#0A0A0C] border border-[#D4FF00]/20 sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col h-full sm:h-auto sm:max-h-[90vh] overflow-hidden shadow-2xl shadow-black/50 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Indicador de arrastre premium */}
         <div className="w-12 h-1.5 bg-white/[0.08] rounded-full mx-auto mt-4 sm:hidden" />
 
-        {/* Cabecera con acento neón */}
         <div className="px-6 pt-4 pb-3 flex justify-between items-start">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               {exercise.name}
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#D4FF00] shadow-[0_0_6px_rgba(212,255,0,0.7)]" />
             </h2>
-            <p className="text-xs text-[#D4FF00]/90 mt-0.5 flex items-center gap-1">
-              <Info size={12} className="text-[#D4FF00]" />
+            <p className="text-xs text-[#D4FF00]/90 mt-0.5">
               {exercise.muscle}
               {exercise.secondaryMuscles ? ` + ${exercise.secondaryMuscles}` : ''}
             </p>
@@ -60,12 +57,10 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
           </button>
         </div>
 
-        {/* Contenido desplazable */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
           {exercise.description && (
             <div>
-              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Info size={14} className="text-[#D4FF00]" />
+              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
                 Instrucciones
               </h3>
               <div className="text-sm text-zinc-300 whitespace-pre-wrap break-words leading-relaxed">
@@ -76,53 +71,60 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
 
           {exercise.video_url && (
             <div>
-              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Video size={14} className="text-[#D4FF00]" />
+              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
                 Demostración
               </h3>
-              <div className="rounded-2xl overflow-hidden bg-[#09090B] border border-[#D4FF00]/30 shadow-[0_0_20px_rgba(212,255,0,0.1)]">
-                {isYouTube ? (
-                  videoError ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-zinc-500 gap-3">
-                      <div className="w-12 h-12 rounded-full bg-white/[0.03] border border-white/[0.05] flex items-center justify-center">
-                        <AlertTriangle size={22} className="text-amber-400" />
+              {!navigator.onLine ? (
+                <div className="flex flex-col items-center justify-center py-10 text-zinc-500 gap-3">
+                  <WifiOff size={22} className="text-zinc-600" />
+                  <p className="text-sm font-medium">Sin conexión a internet</p>
+                  <p className="text-xs text-zinc-600">No se puede cargar el video.</p>
+                </div>
+              ) : (
+                <div className="rounded-2xl overflow-hidden bg-[#09090B] border border-[#D4FF00]/30 shadow-[0_0_20px_rgba(212,255,0,0.1)]">
+                  {isYouTube ? (
+                    videoError ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-zinc-500 gap-3">
+                        <div className="w-12 h-12 rounded-full bg-white/[0.03] border border-white/[0.05] flex items-center justify-center">
+                          <AlertTriangle size={22} className="text-amber-400" />
+                        </div>
+                        <p className="text-sm font-medium">Video no disponible</p>
+                        <p className="text-xs text-zinc-600">Busca el ejercicio directamente en YouTube</p>
                       </div>
-                      <p className="text-sm font-medium">Video no disponible</p>
-                      <p className="text-xs text-zinc-600">Busca el ejercicio directamente en YouTube</p>
-                    </div>
+                    ) : (
+                      <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                        <iframe
+                          key={mediaKey}
+                          src={youtubeEmbedUrl}
+                          title="Video del ejercicio"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="absolute inset-0 w-full h-full"
+                          onError={() => setVideoError(true)}
+                          sandbox="allow-scripts allow-same-origin allow-presentation"
+                        />
+                      </div>
+                    )
+                  ) : isImage ? (
+                    <img
+                      src={exercise.video_url}
+                      alt={exercise.name}
+                      className="w-full h-auto object-contain max-h-56"
+                    />
                   ) : (
-                    <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                      <iframe
-                        key={mediaKey}
-                        src={youtubeEmbedUrl}
-                        title="Video del ejercicio"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="absolute inset-0 w-full h-full"
-                        onError={() => setVideoError(true)}
-                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                      />
-                    </div>
-                  )
-                ) : isImage ? (
-                  <img
-                    src={exercise.video_url}
-                    alt={exercise.name}
-                    className="w-full h-auto object-contain max-h-56"
-                  />
-                ) : (
-                  <video
-                    key={mediaKey}
-                    src={exercise.video_url}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="w-full h-auto max-h-64"
-                    onError={() => setVideoError(true)}
-                  />
-                )}
-              </div>
+                    <video
+                      key={mediaKey}
+                      src={exercise.video_url}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="w-full h-auto max-h-64"
+                      onError={() => setVideoError(true)}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -136,7 +138,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
           )}
         </div>
 
-        {/* Botón cerrar móvil con neón */}
         <div className="p-4 border-t border-white/[0.05] sm:hidden">
           <button
             onClick={onClose}
