@@ -177,8 +177,8 @@ export default function TrackerView({
         </div>
       </div>
 
-      {/* Contenedor scrollable con padding inferior extra */}
-     <div className="flex-1 overflow-y-auto px-5 pb-40 space-y-4">
+      {/* Contenedor scrollable corregido */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-6 space-y-4 touch-pan-y overscroll-contain">
         {exercises.map(ex => {
           const exKey = ex.libraryExerciseId || ex.id;
           const record = personalRecords[exKey];
@@ -282,18 +282,15 @@ export default function TrackerView({
         })}
       </div>
 
-      {/* Botón finalizar flotante, sin caja negra */}
-<div
-  className="absolute bottom-0 left-0 right-0 z-20 px-4"
-  style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 100px)' }}
->
-  <button
-    onClick={handleFinish}
-    className="w-full bg-[#D4FF00] text-[#09090B] font-bold py-2.5 rounded-2xl text-sm transition-all active:scale-[0.98] shadow-lg shadow-[#D4FF00]/25 hover:bg-[#e5ff1a] hover:shadow-[0_0_30px_rgba(212,255,0,0.5)]"
-  >
-    Finalizar Entrenamiento
-  </button>
-</div>
+      {/* Botón finalizar dentro del flujo (no absoluto) */}
+      <div className="px-4 pt-3 pb-24">
+        <button
+          onClick={handleFinish}
+          className="w-full bg-[#D4FF00] text-[#09090B] font-bold py-3 rounded-2xl text-sm transition-all active:scale-[0.98] shadow-lg shadow-[#D4FF00]/25 hover:bg-[#e5ff1a] hover:shadow-[0_0_30px_rgba(212,255,0,0.5)]"
+        >
+          Finalizar Entrenamiento
+        </button>
+      </div>
 
       {showExitConfirm && (
         <div className="fixed inset-0 z-[250] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
