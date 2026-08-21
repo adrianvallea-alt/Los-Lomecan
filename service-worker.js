@@ -1,32 +1,32 @@
-const CACHE_NAME = 'lomecan-v3'; // Incrementa la versión para forzar actualización
+const CACHE_NAME = 'lomecan-v4'; // Incrementa versión para forzar actualización
 
-// ============================================================
-// Función para obtener la URL base de la app (relativa al SW)
-// ============================================================
 const getBaseUrl = () => {
   return self.location.pathname.replace(/\/[^/]*$/, '/');
 };
 
+// Función para saber si la URL es un video MP4 (u otro archivo grande cacheable)
+const isCacheableVideo = (url) => {
+  return url.pathname.endsWith('.mp4') || url.hostname.includes('cloudfront.net');
+};
+
 // ============================================================
-// INSTALACIÓN: precargar recursos esenciales con URLs correctas
+// INSTALACIÓN: precargar recursos esenciales
 // ============================================================
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       const base = getBaseUrl();
       const precacheUrls = [
-        base,                    // página principal (index.html)
+        base,
         base + 'index.html',
         base + 'manifest.json',
         base + 'favicon-16x16.png',
         base + 'icons/icon-192.png',
         base + 'icons/icon-512.png'
       ];
-
       console.log('🔧 Service Worker: Instalando...', precacheUrls);
       return cache.addAll(precacheUrls).catch(err => {
         console.warn('⚠️ Error precargando algunos recursos:', err);
-        // No lanzamos error para que la instalación continúe
       });
     })
   );
@@ -34,13 +34,42 @@ self.addEventListener('install', (event) => {
 });
 
 // ============================================================
-// FETCH: estrategia según el tipo de recurso
+// FETCH: estrategia según tipo de recurso
 // ============================================================
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // === 1. NO CACHEAR peticiones a Supabase (API) ===
+  // === 1. VIDEOS MP4 / CLOUDFRONT: cache-first ===
+  if (isCacheableVideo(url)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            // Actualizar en segundo plano (stale-while-revalidate)
+            fetch(request).then((response) => {
+              if (response && response.status === 200) {
+                cache.put(request, response.clone());
+              }
+            }).catch(() => {});
+            return cachedResponse;
+          }
+
+          return fetch(request).then((response) => {
+            if (response && response.status === 200) {
+              cache.put(request, response.clone());
+            }
+            return response;
+          }).catch(() => {
+            return new Response('Sin conexión', { status: 503 });
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // === 2. SUPABASE: NO CACHEAR (excepto storage si quieres, se puede extender) ===
   if (url.hostname.includes('supabase.co')) {
     event.respondWith(
       fetch(request).catch(() => {
@@ -53,10 +82,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // === 2. IGNORAR extensiones de Chrome ===
+  // === 3. IGNORAR extensiones de Chrome ===
   if (request.url.startsWith('chrome-extension://')) return;
 
-  // === 3. NAVEGACIÓN (HTML): network-first con fallback a caché ===
+  // === 4. NAVEGACIÓN (HTML): network-first con fallback a caché ===
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -72,7 +101,6 @@ self.addEventListener('fetch', (event) => {
               console.log('📄 Sirviendo index.html desde caché (offline)');
               return cached;
             }
-            // Último recurso: intentar con la URL original
             return caches.match('/index.html').then(cached2 => {
               if (cached2) return cached2;
               return new Response(
@@ -86,11 +114,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // === 4. RECURSOS ESTÁTICOS: cache-first con stale-while-revalidate ===
+  // === 5. RECURSOS ESTÁTICOS: cache-first ===
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Actualizar en segundo plano
         fetch(request)
           .then((response) => {
             if (response && response.status === 200) {
