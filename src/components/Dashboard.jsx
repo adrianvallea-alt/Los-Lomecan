@@ -1,76 +1,84 @@
+// src/components/Dashboard.jsx
 import React, { useMemo, useState, useEffect, memo } from 'react';
-import { Play, Sun, Plus, Minus, Scale, Share2, Droplet, Flame, Waves, Zap } from 'lucide-react';
+import { 
+  Play, Sun, Plus, Minus, Scale, Share2, Droplet, Waves, Sparkles, 
+  Utensils, Trash2, Clock, ChevronDown, ChevronUp, Zap, Target, Flame 
+} from 'lucide-react';
 import useAchievements from '../hooks/useAchievements';
 import MealSuggestions from './MealSuggestions';
 import ShareAchievementModal from './ShareAchievementModal';
 
+const triggerHaptic = (pattern = 25) => {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+};
+
 // ==========================================================================
-// CÍRCULO DE AGUA (nuevo diseño más amplio)
+// CÍRCULO DE AGUA DE PRECISIÓN (AQUA NEÓN)
 // ==========================================================================
 const WaterCircle = memo(({ percent }) => {
   const getMotivationalMessage = (p) => {
-    if (p === 0) return { msg: 'Empieza a beber', color: '#a1a1aa' };
-    if (p <= 20) return { msg: 'Buen comienzo', color: '#60a5fa' };
-    if (p <= 60) return { msg: 'Más de la mitad', color: '#3b82f6' };
-    if (p <= 99) return { msg: 'Casi al 100%', color: '#059669' };
-    return { msg: '¡Hidratación completa!', color: '#d4ff00' };
+    if (p === 0) return { msg: 'INICIAR HIDRATACIÓN', color: '#71717A' };
+    if (p <= 30) return { msg: 'BUEN RITMO 💧', color: '#00F5FF' };
+    if (p <= 70) return { msg: 'MÁS DEL 50%', color: '#38BDF8' };
+    if (p < 100) return { msg: 'CASI EN LA META', color: '#00FFA3' };
+    return { msg: 'META COMPLETADA 🎯', color: '#D4FF00' };
   };
 
   const { msg, color } = getMotivationalMessage(percent);
-  const radius = 60, stroke = 8;
+  const radius = 56;
+  const stroke = 7;
   const normalizedRadius = radius - stroke * 2;
   const circumference = normalizedRadius * 2 * Math.PI;
-  const offset = circumference - (percent / 100) * circumference;
+  const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full">
-      <div className="relative w-[140px] h-[140px] flex items-center justify-center">
-        <svg height="140" width="140" className="transform -rotate-90">
-          <defs>
-            <linearGradient id="waterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={color} stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.75" />
-            </linearGradient>
-          </defs>
+    <div className="flex flex-col items-center gap-2.5 w-full">
+      <div className="relative w-[130px] h-[130px] flex items-center justify-center">
+        <svg height="130" width="130" className="-rotate-90">
           <circle
-            stroke="rgba(255,255,255,0.05)"
+            stroke="rgba(255,255,255,0.04)"
             fill="transparent"
             strokeWidth={stroke}
             r={normalizedRadius}
-            cx="70"
-            cy="70"
+            cx="65"
+            cy="65"
           />
           <circle
-            stroke="url(#waterGradient)"
+            stroke={color}
             fill="transparent"
             strokeWidth={stroke}
             strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={offset}
+            style={{ 
+              strokeDashoffset: offset, 
+              transition: 'stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+              filter: `drop-shadow(0 0 8px ${color})`
+            }}
             strokeLinecap="round"
             r={normalizedRadius}
-            cx="70"
-            cy="70"
-            filter="drop-shadow(0 0 12px currentColor)"
+            cx="65"
+            cy="65"
           />
         </svg>
+
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <Droplet size={26} style={{ color }} className="mb-1" />
-          <span className="text-2xl font-bold tracking-tight text-white tabular-nums">
-            {Math.round(percent)}%
+          <Droplet size={20} style={{ color }} className="mb-0.5" />
+          <span className="text-2xl font-mono font-black text-white tabular-nums tracking-tighter">
+            {Math.round(percent)}<span className="text-xs text-zinc-500 font-bold">%</span>
           </span>
         </div>
       </div>
-      <div className="h-8 flex items-center">
-        <span className="text-[11px] font-medium text-stone-300 tracking-wide px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08] shadow-[0_0_10px_rgba(255,255,255,0.05)]">
-          {msg}
-        </span>
-      </div>
+
+      <span className="text-[9px] font-mono font-black tracking-[0.22em] text-zinc-300 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
+        {msg}
+      </span>
     </div>
   );
 });
 
 // ==========================================================================
-// TRACKER DE AGUA (estilo más premium)
+// TRACKER DE AGUA
 // ==========================================================================
 const WaterTracker = memo(({ waterGoal, profileId }) => {
   const storageKey = `water_${profileId}_${new Date().toDateString()}`;
@@ -78,77 +86,69 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
     const saved = localStorage.getItem(storageKey);
     return saved ? parseInt(saved, 10) : 0;
   });
-  const [manualInput, setManualInput] = useState('');
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      localStorage.setItem(storageKey, waterCurrent);
-    }, 0);
-    return () => clearTimeout(timeout);
+    localStorage.setItem(storageKey, waterCurrent.toString());
   }, [waterCurrent, storageKey]);
 
-  const waterPercent = Math.min((waterCurrent / waterGoal) * 100, 100);
-  const addWater = (ml) => setWaterCurrent((prev) => Math.min(prev + ml, waterGoal * 1.5));
-  const removeWater = (ml) => setWaterCurrent((prev) => Math.max(prev - ml, 0));
+  const waterPercent = Math.min((waterCurrent / (waterGoal || 2000)) * 100, 100);
 
-  const handleManualChange = (e) => {
-    const value = e.target.value;
-    setManualInput(value);
-    const num = parseInt(value, 10);
-    if (!isNaN(num) && num >= 0) setWaterCurrent(num);
-    else if (value === '') setWaterCurrent(0);
+  const addWater = (ml) => {
+    triggerHaptic(20);
+    setWaterCurrent((prev) => Math.min(prev + ml, (waterGoal || 2000) * 2));
+  };
+
+  const removeWater = (ml) => {
+    triggerHaptic(20);
+    setWaterCurrent((prev) => Math.max(prev - ml, 0));
   };
 
   return (
-    <div className="relative z-10 mb-5 shrink-0">
-      <div className="border border-white/[0.08] bg-gradient-to-br from-white/[0.05] to-transparent backdrop-blur-xl rounded-[2.5rem] p-6 flex flex-col shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
-        <div className="flex justify-between items-center mb-5">
-          <span className="text-sm font-bold text-white flex items-center gap-2">
-            <Waves size={18} className="text-[#D4FF00]" />
-            Hidratación
+    <div className="relative z-10 mb-4 shrink-0">
+      <div className="luxury-card p-5 flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+          <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white flex items-center gap-2">
+            <Waves size={15} className="text-[#00F5FF]" />
+            Telemetría de Hidratación
           </span>
-          <span className="text-xs font-semibold text-stone-300 tabular-nums bg-stone-900/80 px-3 py-1 rounded-full border border-white/[0.08]">
-            {waterCurrent} / {waterGoal} ml
+          <span className="text-[11px] font-mono font-bold text-zinc-300 bg-black/40 px-2.5 py-0.5 rounded-full border border-white/[0.08]">
+            {waterCurrent} <span className="text-zinc-500">/ {waterGoal} ml</span>
           </span>
         </div>
+
         <WaterCircle percent={waterPercent} />
-        <div className="flex items-center justify-between w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl p-2.5 mt-6">
+
+        {/* Atajos rápidos táctiles */}
+        <div className="grid grid-cols-4 gap-2 mt-5">
           <button
             onClick={() => removeWater(250)}
             disabled={waterCurrent <= 0}
-            className="w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.1] hover:border-red-400/40 active:scale-95 flex items-center justify-center text-stone-300 disabled:opacity-20 transition-all"
+            className="py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-red-400 text-xs font-mono font-bold active:scale-95 disabled:opacity-20 transition-all flex items-center justify-center"
+            title="Restar 250ml"
           >
-            <Minus size={16} />
+            -250
           </button>
-          <div className="flex flex-col items-center justify-center">
-            <input
-              type="number"
-              value={manualInput}
-              onChange={handleManualChange}
-              placeholder={waterCurrent.toString()}
-              className="w-20 bg-transparent text-center text-2xl font-bold text-white focus:placeholder-transparent outline-none tabular-nums"
-              min="0"
-              inputMode="numeric"
-            />
-            <span className="text-[9px] text-stone-500 uppercase tracking-widest font-medium">ml</span>
-          </div>
           <button
             onClick={() => addWater(250)}
-            className="w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.1] hover:border-[#D4FF00]/50 hover:shadow-[0_0_12px_rgba(212,255,0,0.3)] active:scale-95 flex items-center justify-center text-stone-300 transition-all"
+            className="py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-zinc-200 hover:text-[#00F5FF] hover:border-[#00F5FF]/40 text-xs font-mono font-bold active:scale-95 transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
           >
-            <Plus size={16} />
+            +250ml
           </button>
-        </div>
-        <div className="flex justify-between items-center w-full mt-4 text-xs">
           <button
-            onClick={() => setWaterCurrent(waterGoal)}
-            className="text-[#D4FF00] font-bold hover:text-white transition-colors uppercase tracking-wide"
+            onClick={() => addWater(500)}
+            className="py-2.5 rounded-xl bg-[#00F5FF]/10 border border-[#00F5FF]/30 text-[#00F5FF] text-xs font-mono font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(0,245,255,0.15)]"
           >
-            Completar día
+            +500ml
           </button>
-          <span className="text-stone-400 tabular-nums">
-            ~{Math.round((waterCurrent / 250) * 10) / 10} vasos
-          </span>
+          <button
+            onClick={() => {
+              triggerHaptic(50);
+              setWaterCurrent(waterGoal || 2000);
+            }}
+            className="py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-zinc-300 text-[10px] font-mono font-extrabold uppercase tracking-wider active:scale-95 transition-all hover:text-white hover:border-[#D4FF00]/40"
+          >
+            Meta
+          </button>
         </div>
       </div>
     </div>
@@ -156,26 +156,28 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
 });
 
 // ==========================================================================
-// MACROBAR (nuevo estilo con más brillo)
+// CÁPSULA DE MACRONUTRIENTES
 // ==========================================================================
-const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
-  const percent = Math.min((current / max) * 100, 100);
+const MacroCapsule = memo(({ label, current, max, color, glowColor, unit = 'g' }) => {
+  const percent = Math.min((current / (max || 1)) * 100, 100);
+  const isOver = current > max && max > 0;
+
   return (
     <div className="w-full shrink-0">
-      <div className="flex justify-between items-baseline mb-2">
-        <span className="text-xs font-semibold text-stone-300">{label}</span>
+      <div className="flex justify-between items-baseline mb-1.5 font-mono">
+        <span className="text-[11px] font-extrabold tracking-wider text-zinc-300 uppercase">{label}</span>
         <span className="text-xs font-bold text-white tabular-nums">
           {current}
-          <span className="text-stone-500 font-medium text-[10px]">/{max}{unit}</span>
+          <span className="text-zinc-500 font-medium text-[10px]">/{max}{unit}</span>
         </span>
       </div>
-      <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+      <div className="w-full h-2.5 bg-black/50 border border-white/[0.06] rounded-full overflow-hidden p-[1px]">
         <div
-          className="h-full rounded-full transition-all duration-1000 ease-out"
+          className="h-full rounded-full transition-all duration-700 ease-out"
           style={{
             width: `${percent}%`,
-            backgroundColor: color,
-            boxShadow: `0 0 12px ${color}`,
+            background: isOver ? '#FF2A55' : color,
+            boxShadow: `0 0 12px ${isOver ? '#FF2A55' : glowColor}`,
           }}
         />
       </div>
@@ -184,64 +186,181 @@ const MacroBar = memo(({ label, current, max, color, unit = 'g' }) => {
 });
 
 // ==========================================================================
-// ANILLO DE CALORÍAS (más grande y con gradiente)
+// ANILLO DE CALORÍAS DE TELEMETRÍA (CON CENTRO OLED)
 // ==========================================================================
 const CalorieRing = memo(({ current, max }) => {
+  const isOver = current > max && max > 0;
   const remaining = max - current;
-  const percent = Math.min((current / max) * 100, 100);
-  const radius = 72, stroke = 9;
+  const percent = Math.min((current / (max || 1)) * 100, 100);
+
+  const radius = 70;
+  const stroke = 9;
   const normalizedRadius = radius - stroke * 2;
   const circumference = normalizedRadius * 2 * Math.PI;
   const strokeDashoffset = circumference - (percent / 100) * circumference;
-  const isOverGoal = percent > 100;
-  const strokeColor = isOverGoal ? '#ef4444' : '#d4ff00';
+
+  const strokeColor = isOver ? '#FF2A55' : '#D4FF00';
+  const glowShadow = isOver ? 'rgba(255, 42, 85, 0.45)' : 'rgba(212, 255, 0, 0.4)';
 
   return (
-    <div className="relative flex flex-col items-center justify-center py-4 w-full shrink-0">
-      <div className="relative w-[160px] h-[160px] flex items-center justify-center">
-        <svg height="160" width="160" className="-rotate-90 absolute">
-          <defs>
-            <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={strokeColor} stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.7" />
-            </linearGradient>
-          </defs>
+    <div className="relative flex flex-col items-center justify-center py-2 w-full shrink-0">
+      <div className="relative w-[155px] h-[155px] flex items-center justify-center">
+        
+        {/* Dial de fondo con ticks */}
+        <svg height="155" width="155" className="-rotate-90 absolute">
           <circle
-            stroke="rgba(255,255,255,0.05)"
+            stroke="rgba(255,255,255,0.035)"
             fill="transparent"
             strokeWidth={stroke}
             r={normalizedRadius}
-            cx="80"
-            cy="80"
+            cx="77.5"
+            cy="77.5"
           />
           <circle
-            stroke="url(#calorieGradient)"
+            stroke={strokeColor}
             fill="transparent"
             strokeWidth={stroke}
             strokeDasharray={`${circumference} ${circumference}`}
-            style={{ strokeDashoffset, transition: 'stroke-dashoffset 1.2s cubic-bezier(0.16, 1, 0.3, 1)' }}
+            style={{
+              strokeDashoffset,
+              transition: 'stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1)',
+              filter: `drop-shadow(0 0 10px ${glowShadow})`
+            }}
             strokeLinecap="round"
             r={normalizedRadius}
-            cx="80"
-            cy="80"
-            filter="drop-shadow(0 0 15px currentColor)"
+            cx="77.5"
+            cy="77.5"
           />
         </svg>
-        <div className="absolute flex flex-col items-center justify-center text-center">
-          <span className="text-4xl font-black text-white tracking-tight leading-none tabular-nums">
-            {remaining}
-          </span>
-          <span className="text-[10px] text-stone-400 uppercase tracking-[0.2em] mt-1 font-bold">
-            kcal restantes
-          </span>
+
+        {/* Métricas centrales de precisión */}
+        <div className="absolute flex flex-col items-center justify-center text-center px-2">
+          {isOver ? (
+            <>
+              <span className="text-2xl font-mono font-black text-rose-400 tracking-tighter tabular-nums leading-tight">
+                +{Math.abs(remaining)}
+              </span>
+              <span className="text-[9px] font-mono tracking-[0.25em] text-rose-300 uppercase font-black mt-0.5">
+                SUPERÁVIT
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-3xl font-mono font-black text-white tracking-tighter tabular-nums leading-tight">
+                {remaining}
+              </span>
+              <span className="text-[9px] font-mono tracking-[0.25em] text-zinc-400 uppercase font-bold mt-0.5">
+                KCAL RESTANTES
+              </span>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* Barra de progreso numérica */}
+      <div className="flex items-center gap-4 mt-3 text-[11px] font-mono text-zinc-400 bg-black/40 px-3.5 py-1 rounded-full border border-white/[0.06]">
+        <span>Ingesta: <strong className="text-white font-black">{current}</strong></span>
+        <span className="text-zinc-600">/</span>
+        <span>Meta: <strong className="text-[#D4FF00] font-black">{max}</strong></span>
       </div>
     </div>
   );
 });
 
 // ==========================================================================
-// DASHBOARD PRINCIPAL (completamente renovado)
+// REGISTRO DE COMIDAS DEL DÍA (OBSIDIAN GLASS)
+// ==========================================================================
+const TodayFoodLog = memo(({ items, onDeleteFood }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  const formatTime = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <div className="relative z-10 mb-4 shrink-0">
+      <div className="luxury-card p-5">
+        
+        {/* Cabecera del registro */}
+        <div 
+          onClick={() => {
+            triggerHaptic(15);
+            setIsExpanded(!isExpanded);
+          }}
+          className="flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all"
+        >
+          <div className="flex items-center gap-2">
+            <Utensils size={15} className="text-[#D4FF00]" />
+            <h3 className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-white">
+              Registro de Comidas
+            </h3>
+            <span className="text-[10px] font-mono font-bold bg-[#D4FF00]/10 text-[#D4FF00] px-2 py-0.5 rounded-full border border-[#D4FF00]/30 shadow-[0_0_10px_rgba(212,255,0,0.15)]">
+              {items.length}
+            </span>
+          </div>
+
+          <button className="p-1 text-zinc-400 hover:text-white transition-colors">
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        </div>
+
+        {/* Lista de comidas */}
+        {isExpanded && (
+          <div className="mt-4 space-y-2 animate-fade-in">
+            {items.length === 0 ? (
+              <p className="text-center text-xs font-mono text-zinc-500 py-3">
+                Sin registros de alimentos hoy.
+              </p>
+            ) : (
+              items.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-[#050507]/60 border border-white/[0.05] rounded-2xl p-3 flex items-center justify-between gap-3 hover:border-white/[0.1] transition-all shadow-inner-light"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-white truncate">{item.foodName}</p>
+                      <span className="text-[9px] text-zinc-500 font-mono flex items-center gap-0.5">
+                        <Clock size={9} /> {formatTime(item.timestamp)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-zinc-400">
+                      <span className="text-[#D4FF00] font-black">{item.grams}g</span>
+                      <span>·</span>
+                      <span className="text-white font-bold">{item.macros?.cal || 0} kcal</span>
+                      <span>·</span>
+                      <span className="text-[#00F5FF]">P:{item.macros?.pro || 0}g</span>
+                      <span className="text-[#B347FF]">C:{item.macros?.carb || 0}g</span>
+                      <span className="text-[#FFB800]">G:{item.macros?.fat || 0}g</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      triggerHaptic(30);
+                      onDeleteFood(item.id);
+                    }}
+                    className="p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition-all shrink-0"
+                    title="Eliminar alimento"
+                    aria-label="Eliminar alimento registrado"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ==========================================================================
+// DASHBOARD PRINCIPAL DE ULTRA-LUJO
 // ==========================================================================
 export default function Dashboard({
   profile,
@@ -250,15 +369,19 @@ export default function Dashboard({
   onStartWorkout,
   onGoToRoutines,
   onGoToEvolution,
-  onAddFood
+  onAddFood,
+  onDeleteFood,
 }) {
-  const goals = profile?.goals || { cal: 2800, pro: 180, carb: 300, fat: 75 };
+  const goals = profile?.goals || { cal: 2500, pro: 160, carb: 260, fat: 70 };
 
-  const todayTotals = useMemo(() => {
+  const todayItems = useMemo(() => {
     const today = new Date().toDateString();
-    const todayItems = dailyIntake.filter(
+    return (dailyIntake || []).filter(
       (entry) => new Date(entry.timestamp).toDateString() === today
     );
+  }, [dailyIntake]);
+
+  const todayTotals = useMemo(() => {
     return todayItems.reduce(
       (acc, item) => {
         acc.cal += item.macros?.cal || 0;
@@ -269,13 +392,13 @@ export default function Dashboard({
       },
       { cal: 0, pro: 0, carb: 0, fat: 0 }
     );
-  }, [dailyIntake]);
+  }, [todayItems]);
 
   const todayData = {
     cal: { current: Math.round(todayTotals.cal), max: goals.cal },
     pro: { current: Math.round(todayTotals.pro), max: goals.pro },
     carb: { current: Math.round(todayTotals.carb), max: goals.carb },
-    fat: { current: Math.round(todayTotals.fat), max: goals.fat }
+    fat: { current: Math.round(todayTotals.fat), max: goals.fat },
   };
 
   const { currentStreak, unlockedAchievements, longestStreak } = useAchievements(profile?.id);
@@ -285,76 +408,103 @@ export default function Dashboard({
     cal: Math.max(goals.cal - todayTotals.cal, 0),
     pro: Math.max(goals.pro - todayTotals.pro, 0),
     carb: Math.max(goals.carb - todayTotals.carb, 0),
-    fat: Math.max(goals.fat - todayTotals.fat, 0)
+    fat: Math.max(goals.fat - todayTotals.fat, 0),
   };
 
   return (
-    <div className="flex flex-col px-5 pt-2 pb-[140px] text-white bg-[#09090B] select-none relative">
-      {/* Fondo con más brillo */}
-      <div className="absolute inset-0 pointer-events-none opacity-40 bg-[radial-gradient(circle_at_50%_0%,#D4FF0015,transparent_70%)]" />
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 relative z-10 shrink-0">
+    /* Espacio superior pt-2 y espacio inferior pb-44 para que el scroll suba holgadamente */
+    <div className="flex flex-col px-5 pt-2 pb-44 text-white bg-transparent select-none relative no-scrollbar">
+      
+      {/* Header de rendimiento diario */}
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-2">
-          <Sun size={18} className="text-[#D4FF00] drop-shadow-[0_0_6px_rgba(212,255,0,0.5)]" />
-          <h2 className="text-lg font-black tracking-wide text-white">Hoy</h2>
-          <div className="flex items-center gap-1.5 ml-2 bg-[#D4FF00]/15 border border-[#D4FF00]/40 rounded-full px-4 py-1.5 text-xs font-bold tracking-wider text-[#D4FF00] uppercase shadow-[0_0_15px_rgba(212,255,0,0.2)]">
+          <div className="p-1.5 rounded-xl bg-[#D4FF00]/10 border border-[#D4FF00]/25 text-[#D4FF00] shadow-[0_0_12px_rgba(212,255,0,0.2)]">
+            <Sun size={15} />
+          </div>
+          <h2 className="text-base font-black tracking-tight text-white font-sans">Panel de Hoy</h2>
+          
+          <div className="luxury-badge flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4FF00] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#D4FF00]"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4FF00] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#D4FF00]" />
             </span>
-            {currentStreak} días
+            {currentStreak} DÍAS
           </div>
         </div>
+
         <button
-          onClick={() => setShowShareModal(true)}
-          className="flex items-center gap-2 bg-white/[0.06] border border-white/[0.1] active:scale-[0.97] rounded-full px-4 py-2 text-xs font-bold text-white tracking-wide uppercase transition-all hover:bg-white/[0.1] hover:border-[#D4FF00]/40 hover:shadow-[0_0_15px_rgba(212,255,0,0.2)]"
+          onClick={() => {
+            triggerHaptic(20);
+            setShowShareModal(true);
+          }}
+          className="p-2 rounded-full bg-white/[0.03] border border-white/[0.08] text-zinc-300 hover:text-white active:scale-95 transition-all shadow-inner-light"
+          aria-label="Compartir logros"
         >
           <Share2 size={14} className="text-[#D4FF00]" />
-          Compartir
         </button>
       </div>
 
-      {/* Tarjeta principal de calorías */}
-      <div className="relative z-10 mb-5 shrink-0">
-        <div className="border border-[#D4FF00]/20 bg-gradient-to-br from-[#D4FF00]/10 via-white/[0.02] to-transparent backdrop-blur-2xl rounded-[2.5rem] p-6 flex flex-col items-center shadow-[0_0_30px_rgba(212,255,0,0.15)]">
+      {/* Tarjeta principal de calorías (Obsidian Telemetry) */}
+      <div className="relative z-10 mb-4 shrink-0">
+        <div className="luxury-card p-6 flex flex-col items-center">
           <CalorieRing current={todayData.cal.current} max={todayData.cal.max} />
         </div>
       </div>
 
-      {/* Tarjeta de macros */}
-      <div className="relative z-10 mb-5 shrink-0">
-        <div className="border border-white/[0.08] bg-white/[0.04] backdrop-blur-2xl rounded-[2rem] p-6 flex flex-col gap-6 shadow-[0_8px_30px_rgba(0,0,0,0.4)]">
-          <MacroBar label="Proteína" current={todayData.pro.current} max={todayData.pro.max} color="#60a5fa" />
-          <MacroBar label="Carbohidratos" current={todayData.carb.current} max={todayData.carb.max} color="#a78bfa" />
-          <MacroBar label="Grasas" current={todayData.fat.current} max={todayData.fat.max} color="#fbbf24" />
+      {/* Tarjeta de macronutrientes (Cápsulas Neón) */}
+      <div className="relative z-10 mb-4 shrink-0">
+        <div className="luxury-card p-5 flex flex-col gap-4">
+          <MacroCapsule 
+            label="Proteína" 
+            current={todayData.pro.current} 
+            max={todayData.pro.max} 
+            color="linear-gradient(90deg, #00C6FF 0%, #0072FF 100%)" 
+            glowColor="rgba(0, 198, 255, 0.4)" 
+          />
+          <MacroCapsule 
+            label="Carbohidratos" 
+            current={todayData.carb.current} 
+            max={todayData.carb.max} 
+            color="linear-gradient(90deg, #D946EF 0%, #8B5CF6 100%)" 
+            glowColor="rgba(217, 70, 239, 0.4)" 
+          />
+          <MacroCapsule 
+            label="Grasas Saludables" 
+            current={todayData.fat.current} 
+            max={todayData.fat.max} 
+            color="linear-gradient(90deg, #FBBF24 0%, #F59E0B 100%)" 
+            glowColor="rgba(251, 191, 36, 0.4)" 
+          />
         </div>
       </div>
 
-      {/* Sugerencias de comidas */}
-      <div className="mb-5 relative z-10 shrink-0">
+      {/* Sugerencias de comidas de precisión */}
+      <div className="mb-4 shrink-0">
         <MealSuggestions remainingMacros={remainingMacros} goals={goals} onAddFood={onAddFood} />
       </div>
 
-      {/* Tracker de agua */}
+      {/* Registro de comidas del día */}
+      <TodayFoodLog items={todayItems} onDeleteFood={onDeleteFood} />
+
+      {/* Tracker de Agua */}
       <WaterTracker waterGoal={profile?.water_goal || 2000} profileId={profile?.id} />
 
-      {/* Acciones inferiores */}
-      <div className="flex flex-col gap-4 relative z-10 shrink-0">
+      {/* Botones de acción principales de alto impacto */}
+      <div className="flex flex-col gap-3 pt-2 shrink-0">
         <button
           onClick={onGoToEvolution}
-          className="mx-auto flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-300 hover:text-white transition-all bg-white/[0.05] border border-white/[0.1] rounded-full px-6 py-3 active:scale-95 hover:border-[#D4FF00]/40 hover:shadow-[0_0_15px_rgba(212,255,0,0.2)]"
+          className="w-full py-3.5 bg-white/[0.025] border border-white/[0.08] rounded-2xl text-xs font-mono font-extrabold uppercase tracking-widest text-zinc-300 hover:text-white hover:border-[#D4FF00]/40 flex items-center justify-center gap-2 active:scale-95 transition-all shadow-inner-light"
         >
-          <Scale size={14} className="text-[#D4FF00]" />
-          Registrar peso
+          <Scale size={15} className="text-[#D4FF00]" />
+          Registrar Peso y Métricas
         </button>
 
         <button
-          onClick={onGoToRoutines}
-          className="w-full h-16 rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 active:scale-[0.98] uppercase tracking-[0.2em] font-black text-sm text-stone-950 bg-[#D4FF00] hover:bg-[#e5ff1a] shadow-[0_0_30px_rgba(212,255,0,0.4)] hover:shadow-[0_0_40px_rgba(212,255,0,0.6)]"
+          onClick={onStartWorkout}
+          className="w-full py-4 volt-button flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
         >
           <Play size={16} fill="currentColor" />
-          Mis Rutinas
+          {currentRoutine ? `ENTRENAR: ${currentRoutine.name}` : 'INICIAR RUTINA DEL DÍA'}
         </button>
       </div>
 

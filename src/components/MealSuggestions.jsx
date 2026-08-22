@@ -1,6 +1,7 @@
+// src/components/MealSuggestions.jsx
 import React, { useState, useEffect } from 'react';
-import { Plus, Sparkles, Target } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { Plus, Target } from 'lucide-react';
+import { fetchFoods } from '../lib/dataService';
 
 export default function MealSuggestions({ remainingMacros, goals, onAddFood }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -8,9 +9,23 @@ export default function MealSuggestions({ remainingMacros, goals, onAddFood }) {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const fetchSuggestions = async () => {
+    let isMounted = true;
+
+    const loadSuggestions = async () => {
       setLoading(true);
-      const { data: foods } = await supabase.from('foods').select('*').limit(200);
+      let foods = [];
+
+      try {
+        foods = await fetchFoods();
+      } catch (err) {
+        const cached = localStorage.getItem('foodsCache');
+        if (cached) {
+          try { foods = JSON.parse(cached); } catch (e) {}
+        }
+      }
+
+      if (!isMounted) return;
+
       if (!foods || foods.length === 0) {
         setSuggestions([]);
         setLoading(false);
@@ -18,16 +33,16 @@ export default function MealSuggestions({ remainingMacros, goals, onAddFood }) {
         return;
       }
 
-      const { cal, pro, carb, fat } = remainingMacros;
+      const { cal, pro, carb, fat } = remainingMacros || {};
       const now = new Date();
       const currentHour = now.getHours();
 
       const almostComplete =
-        (goals.pro > 0 && pro / goals.pro < 0.2) ||
-        (goals.carb > 0 && carb / goals.carb < 0.2) ||
-        (goals.fat > 0 && fat / goals.fat < 0.2);
+        (goals?.pro > 0 && pro / goals.pro < 0.25) ||
+        (goals?.carb > 0 && carb / goals.carb < 0.25) ||
+        (goals?.fat > 0 && fat / goals.fat < 0.25);
 
-      const isEvening = currentHour >= 20;
+      const isEvening = currentHour >= 19;
       const shouldShow = (almostComplete || isEvening) && (cal > 0 || pro > 0 || carb > 0 || fat > 0);
 
       if (!shouldShow) {
@@ -37,6 +52,7 @@ export default function MealSuggestions({ remainingMacros, goals, onAddFood }) {
         return;
       }
 
+      // Puntuación según los macros que faltan por cumplir
       const scored = foods.map(food => {
         const fCal = food.cal || 0;
         const fPro = food.pro || 0;
@@ -53,107 +69,68 @@ export default function MealSuggestions({ remainingMacros, goals, onAddFood }) {
       scored.sort((a, b) => b.score - a.score);
       setSuggestions(scored.slice(0, 3));
       setLoading(false);
-      
-      // Animación de entrada escalonada
-      setTimeout(() => setIsVisible(true), 100);
+
+      setTimeout(() => {
+        if (isMounted) setIsVisible(true);
+      }, 100);
     };
 
-    fetchSuggestions();
-  }, [remainingMacros, goals]);
+    loadSuggestions();
 
-  if (loading) {
-    return (
-      <div className="mb-5 relative z-10 shrink-0">
-        <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2rem] p-5 animate-pulse">
-          <div className="h-3 w-28 bg-white/[0.04] rounded-full mx-auto mb-4" />
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center justify-between bg-white/[0.02] rounded-xl p-3.5">
-                <div className="space-y-2 flex-1">
-                  <div className="h-4 w-24 bg-white/[0.04] rounded-lg" />
-                  <div className="h-3 w-36 bg-white/[0.03] rounded-lg" />
-                </div>
-                <div className="h-9 w-20 bg-white/[0.04] rounded-xl" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+    return () => {
+      isMounted = false;
+    };
+  }, [remainingMacros?.cal, remainingMacros?.pro, remainingMacros?.carb, remainingMacros?.fat, goals?.pro, goals?.carb, goals?.fat]);
 
-  if (suggestions.length === 0) return null;
+  if (loading || suggestions.length === 0) return null;
 
   return (
-    <div className={`mb-5 relative z-10 shrink-0 transition-all duration-700 ease-out-expo ${
+    <div className={`mb-4 relative z-10 shrink-0 transition-all duration-500 ease-out ${
       isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
     }`}>
-      <div className="border border-white/[0.05] bg-white/[0.02] backdrop-blur-xl rounded-[2rem] p-5">
+      <div className="border border-white/[0.08] bg-white/[0.02] backdrop-blur-2xl rounded-[2.2rem] p-5 shadow-lg">
         
-        {/* Cabecera con microcopy inteligente */}
-        <div className="flex items-center justify-center gap-2 mb-5">
-          <div className="w-6 h-6 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/20 flex items-center justify-center">
-            <Target size={11} className="text-[#D4FF00]" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Target size={16} className="text-[#D4FF00]" />
+            <span className="text-xs font-black text-white uppercase tracking-wider">
+              Sugerencias para completar tus macros
+            </span>
           </div>
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Completa tus macros
-          </span>
+          <span className="text-[10px] text-zinc-500 font-mono">Personalizado</span>
         </div>
 
-        {/* Lista de sugerencias */}
         <div className="space-y-2">
-          {suggestions.map((food, index) => (
+          {suggestions.map((food) => (
             <div
-              key={food.id}
-              className="flex items-center justify-between bg-white/[0.03] border border-white/[0.04] rounded-2xl p-3.5 transition-all duration-300 hover:border-white/[0.08] hover:bg-white/[0.04]"
-              style={{
-                opacity: isVisible ? 1 : 0,
-                transform: isVisible ? 'translateY(0)' : 'translateY(8px)',
-                transitionDelay: `${index * 80}ms`,
-                transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-              }}
+              key={food.id || food.barcode}
+              className="flex items-center justify-between bg-white/[0.02] border border-white/[0.04] rounded-2xl p-3 hover:border-white/[0.08] transition-all"
             >
-              {/* Info del alimento */}
               <div className="text-left flex-1 min-w-0 mr-3">
-                <p className="text-white text-sm font-semibold tracking-tight truncate">
+                <p className="text-white text-xs font-bold truncate">
                   {food.name}
                 </p>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-[10px] text-zinc-500 font-medium">
-                    {food.cal} kcal
-                  </span>
-                  <div className="flex gap-2 text-[10px]">
-                    <span className="text-blue-400/80 font-medium">P:{food.pro}</span>
-                    <span className="text-violet-400/80 font-medium">C:{food.carb}</span>
-                    <span className="text-amber-400/80 font-medium">G:{food.fat}</span>
-                  </div>
+                <div className="flex items-center gap-2 mt-0.5 text-[10px] font-mono text-zinc-400">
+                  <span className="text-[#D4FF00] font-bold">{food.cal} kcal</span>
+                  <span>·</span>
+                  <span className="text-blue-400">P:{food.pro}g</span>
+                  <span className="text-purple-400">C:{food.carb}g</span>
+                  <span className="text-amber-400">G:{food.fat}g</span>
                 </div>
               </div>
 
-              {/* Botón de añadir con área táctil generosa */}
               <button
                 onClick={() => onAddFood(food, 100)}
-                className="flex-shrink-0 h-11 px-4 bg-[#D4FF00] text-[#09090B] text-xs font-bold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all shadow-lg shadow-[#D4FF00]/10 hover:bg-[#e5ff1a]"
+                className="shrink-0 px-3 py-2 bg-[#D4FF00] text-[#09090B] text-xs font-black rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-md hover:bg-[#e5ff1a]"
                 aria-label={`Añadir 100g de ${food.name}`}
               >
-                <Plus size={14} strokeWidth={2.5} />
-                <span className="tracking-wide">100g</span>
+                <Plus size={14} strokeWidth={3} />
+                <span>100g</span>
               </button>
             </div>
           ))}
         </div>
-
-        {/* Sutil indicador de que son sugerencias personalizadas */}
-        <p className="text-[9px] text-zinc-600 text-center mt-4 tracking-wide">
-          Basado en lo que te falta hoy
-        </p>
       </div>
-
-      <style>{`
-        .ease-out-expo {
-          transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-        }
-      `}</style>
     </div>
   );
 }
