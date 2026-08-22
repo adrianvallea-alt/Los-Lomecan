@@ -1,4 +1,5 @@
-const CACHE_NAME = 'lomecan-v9'; // Incrementa versión para forzar actualización
+// public/service-worker.js
+const CACHE_NAME = 'lomecan-v10'; // Incrementada versión para forzar actualización limpia
 
 const getBaseUrl = () => {
   return self.location.pathname.replace(/\/[^/]*$/, '/');
@@ -16,11 +17,11 @@ self.addEventListener('install', (event) => {
         base + 'index.html',
         base + 'manifest.json',
         base + 'favicon-16x16.png',
+        base + 'favicon-32x32.png',
         base + 'icons/icon-192.png',
         base + 'icons/icon-512.png'
       ];
-      console.log('🔧 SW instalando...', precacheUrls);
-      return cache.addAll(precacheUrls).catch(err => console.warn('Precarga parcial:', err));
+      return cache.addAll(precacheUrls).catch(() => {});
     })
   );
   self.skipWaiting();
@@ -33,27 +34,19 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // No interceptar videos ni archivos externos con problemas de CORS
-  if (url.hostname.includes('cloudfront.net') || url.pathname.endsWith('.mp4')) {
-    // Dejar pasar sin interceptar (el navegador los maneja)
+  // 1. SUPABASE y APIs Externas: NO interceptar con respuestas 503 falsas
+  // Dejar que el código de la app gestione el offline directamente con LocalStorage
+  if (
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('openfoodfacts.org') ||
+    url.hostname.includes('r2.dev') ||
+    url.hostname.includes('youtube.com') ||
+    request.url.startsWith('chrome-extension://')
+  ) {
     return;
   }
 
-  // SUPABASE: sin cachear
-  if (url.hostname.includes('supabase.co')) {
-    event.respondWith(
-      fetch(request).catch(() => new Response(JSON.stringify({ error: 'No hay conexión' }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      }))
-    );
-    return;
-  }
-
-  // Ignorar extensiones de Chrome
-  if (request.url.startsWith('chrome-extension://')) return;
-
-  // Navegación: network-first
+  // 2. Navegación (HTML): Network-first con fallback a index.html en caché
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -67,7 +60,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Estáticos: cache-first
+  // 3. Archivos estáticos de la app (JS, CSS, Imágenes locales): Cache-first
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
@@ -87,8 +80,10 @@ self.addEventListener('fetch', (event) => {
 // ============================================================
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-    )).then(() => self.clients.claim())
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
   );
 });
