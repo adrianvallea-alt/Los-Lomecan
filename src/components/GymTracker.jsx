@@ -1,3 +1,4 @@
+// src/components/GymTracker.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Edit3, Trash2 } from 'lucide-react';
 import {
@@ -366,7 +367,7 @@ export default function GymTracker({
             initialData={editingRoutine}
             onSave={async (routineData) => {
               const isGlobal = editingRoutine?.is_global ?? true;
-              const routineId = crypto.randomUUID();
+              const routineId = crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`;
               const routineToSave = {
                 ...routineData,
                 id: routineId,
@@ -418,7 +419,14 @@ export default function GymTracker({
               arr = limitHistory(arr);
               localStorage.setItem(key, JSON.stringify(arr));
 
-              try { await saveWorkoutSession(activeProfile.id, session); } catch (e) { addToQueue('saveWorkoutSession', session); }
+              try { 
+                await saveWorkoutSession(activeProfile.id, session); 
+              } catch (e) { 
+                addToQueue('saveWorkoutSession', session); 
+              }
+
+              // ✅ EVENTO GLOBAL: Actualiza rachas, volumen y logros en vivo
+              window.dispatchEvent(new CustomEvent('workoutFinished'));
 
               await loadAllHistory();
               navigate('finished');

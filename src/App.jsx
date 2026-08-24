@@ -11,7 +11,7 @@ import EditProfileModal from './components/EditProfileModal';
 import IntroScreen from './components/IntroScreen';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
-import { Edit3, Users, Lock, Sparkles, Shield, Radio } from 'lucide-react';
+import { Edit3, Users, Lock, Radio } from 'lucide-react';
 import {
   fetchProfiles,
   fetchUserRoutines,
@@ -35,7 +35,11 @@ const DEFAULT_PROFILES = [
 const uniqueById = (arr) => Array.from(new Map(arr.map(p => [p.id, p])).values());
 
 export default function App() {
-  const [activeProfile, setActiveProfile] = useState(null);
+  const [activeProfile, setActiveProfile] = useState(() => {
+    const saved = localStorage.getItem('lastActiveProfile');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [currentTab, setCurrentTab] = useState('hoy');
   const [dailyIntake, setDailyIntake] = useState([]);
   const [routines, setRoutines] = useState([]);
@@ -45,11 +49,8 @@ export default function App() {
   const [showProfileManager, setShowProfileManager] = useState(false);
   const [showNewProfileModal, setShowNewProfileModal] = useState(false);
   const [openLibrary, setOpenLibrary] = useState(false);
-  const [introSkipped, setIntroSkipped] = useState(false);
+  const [introSkipped, setIntroSkipped] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
-
-  const showIntro = !activeProfile && !introSkipped;
-  const finishIntro = () => setIntroSkipped(true);
 
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
@@ -67,7 +68,16 @@ export default function App() {
               avatar: p.avatar || null,
             }))
           : DEFAULT_PROFILES;
-        setProfiles(uniqueById(merged));
+        const cleaned = uniqueById(merged);
+        setProfiles(cleaned);
+
+        if (activeProfile) {
+          const fresh = cleaned.find(p => p.id === activeProfile.id);
+          if (fresh) {
+            setActiveProfile(fresh);
+            localStorage.setItem('lastActiveProfile', JSON.stringify(fresh));
+          }
+        }
       } catch (err) {
         const saved = localStorage.getItem('userProfiles');
         setProfiles(saved ? uniqueById(JSON.parse(saved)) : DEFAULT_PROFILES);
@@ -78,11 +88,15 @@ export default function App() {
     loadProfiles();
   }, []);
 
-  useEffect(() => {
-    if (profiles.length > 0) {
-      localStorage.setItem('userProfiles', JSON.stringify(uniqueById(profiles)));
-    }
-  }, [profiles]);
+  const handleSelectProfile = (profile) => {
+    setActiveProfile(profile);
+    localStorage.setItem('lastActiveProfile', JSON.stringify(profile));
+  };
+
+  const handleLogout = () => {
+    setActiveProfile(null);
+    localStorage.removeItem('lastActiveProfile');
+  };
 
   // Cargar rutinas del perfil activo
   useEffect(() => {
@@ -117,7 +131,7 @@ export default function App() {
     loadData();
   }, [activeProfile]);
 
-  // Verificar si requiere onboarding
+  // Onboarding
   useEffect(() => {
     if (activeProfile) {
       const needsOnboarding = !activeProfile.weight || !activeProfile.height || !activeProfile.age;
@@ -125,7 +139,6 @@ export default function App() {
     }
   }, [activeProfile]);
 
-  // Actualizar rutinas
   const updateRoutines = async (newRoutines) => {
     setRoutines(newRoutines);
     if (!activeProfile) return;
@@ -152,13 +165,14 @@ export default function App() {
     }
   };
 
-  // Añadir alimento al día
+  // Añadir alimento al día (CON PRESERVACIÓN DE CATEGORÍA / MEALTYPE)
   const addFoodToDay = async (food, grams) => {
     const newEntry = {
       id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       foodId: food.id || null,
       foodName: food.name,
       grams,
+      mealType: food.mealType || null,
       macros: {
         cal: Math.round(((food.cal || 0) * grams) / (food.base_g || 100)),
         pro: parseFloat((((food.pro || 0) * grams) / (food.base_g || 100)).toFixed(1)),
@@ -187,7 +201,6 @@ export default function App() {
     }
   };
 
-  // Eliminar alimento del día
   const deleteFoodFromDay = async (entryId) => {
     setDailyIntake(prev => prev.filter(item => item.id !== entryId));
 
@@ -205,45 +218,6 @@ export default function App() {
     }
   };
 
-  const handleUpdateProfileName = async (newName) => {
-    if (!activeProfile || !newName.trim()) return;
-    const updatedProfiles = profiles.map(p => p.id === activeProfile.id ? { ...p, name: newName.trim() } : p);
-    const cleaned = uniqueById(updatedProfiles);
-    setProfiles(cleaned);
-    setActiveProfile(prev => ({ ...prev, name: newName.trim() }));
-
-    const updatedProfile = cleaned.find(p => p.id === activeProfile.id);
-    if (updatedProfile) {
-      try {
-        await updateProfile(updatedProfile);
-      } catch (e) {
-        addToQueue('updateProfile', updatedProfile);
-      }
-    }
-  };
-
-  const handleSaveNewProfile = async (newProfile) => {
-    const profile = {
-      ...newProfile,
-      id: newProfile.id || 'user_' + Date.now(),
-      goals: newProfile.goals || { cal: 2000, pro: 100, carb: 200, fat: 50 },
-      role: newProfile.role || 'Athlete',
-      color: newProfile.color || 'lime',
-      pin: newProfile.pin || null,
-      avatar: newProfile.avatar || null,
-    };
-    const updated = uniqueById([...profiles, profile]);
-    setProfiles(updated);
-    localStorage.setItem('userProfiles', JSON.stringify(updated));
-
-    try {
-      await updateProfile(profile);
-    } catch (e) {
-      addToQueue('updateProfile', profile);
-    }
-    setShowNewProfileModal(false);
-  };
-
   const handleUpdateProfile = async (updatedProfile) => {
     const updated = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
     const cleaned = uniqueById(updated);
@@ -258,6 +232,7 @@ export default function App() {
 
     if (activeProfile && activeProfile.id === updatedProfile.id) {
       setActiveProfile(updatedProfile);
+      localStorage.setItem('lastActiveProfile', JSON.stringify(updatedProfile));
     }
   };
 
@@ -269,16 +244,11 @@ export default function App() {
       <div className="min-h-[100dvh] bg-[#050507] flex items-center justify-center select-none">
         <div className="flex flex-col items-center gap-3.5">
           <div className="w-12 h-12 border-2 border-[#D4FF00]/20 border-t-[#D4FF00] rounded-full animate-spin shadow-[0_0_20px_rgba(212,255,0,0.2)]" />
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D4FF00] animate-pulse" />
-            <p className="text-zinc-400 text-[10px] font-mono tracking-[0.25em] uppercase font-bold">LOMECAN SYSTEM</p>
-          </div>
+          <p className="text-zinc-400 text-[10px] font-mono tracking-[0.25em] uppercase font-bold">LOMECAN SYSTEM</p>
         </div>
       </div>
     );
   }
-
-  if (showIntro) return <IntroScreen onFinish={finishIntro} />;
 
   if (showProfileManager) {
     return (
@@ -299,7 +269,7 @@ export default function App() {
       <>
         <ProfileSelection
           profiles={profiles}
-          onSelectProfile={setActiveProfile}
+          onSelectProfile={handleSelectProfile}
           onAddProfile={() => setShowNewProfileModal(true)}
           onUpdateProfile={handleUpdateProfile}
         />
@@ -307,7 +277,7 @@ export default function App() {
           <EditProfileModal
             profile={{ name: '', color: 'lime', pin: '', avatar: '' }}
             onSave={(profile) => {
-              handleSaveNewProfile(profile);
+              handleSelectProfile(profile);
               setShowNewProfileModal(false);
             }}
             onCancel={() => setShowNewProfileModal(false)}
@@ -366,16 +336,8 @@ export default function App() {
 
   return (
     <div className="min-h-[100dvh] bg-[#050507] flex justify-center font-sans relative overflow-hidden">
-      
-      {/* Luces atmosféricas de fondo OLED */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[#D4FF00]/[0.035] rounded-full blur-[140px]" />
-        <div className="absolute bottom-0 right-0 w-[400px] h-[350px] bg-[#B347FF]/[0.02] rounded-full blur-[160px]" />
-      </div>
-
       <div className="w-full max-w-md bg-transparent relative flex flex-col h-[100dvh] z-10">
         
-        {/* Micro-badge de sincronización en segundo plano */}
         {queue.length > 0 && (
           <div className="bg-[#D4FF00]/10 border-b border-[#D4FF00]/25 text-[#D4FF00] text-[10px] font-mono tracking-wider font-bold text-center py-1 z-30 backdrop-blur-xl flex items-center justify-center gap-1.5">
             <Radio size={11} className="animate-pulse" />
@@ -383,11 +345,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Header superior de telemetría de atleta VIP */}
+        {/* Header superior */}
         <header className="px-5 pt-3.5 pb-2.5 flex justify-between items-center z-20 bg-[#050507]/80 backdrop-blur-2xl border-b border-white/[0.05] shrink-0">
           <div className="flex items-center gap-3">
-            
-            {/* Avatar con anillo de titanio */}
             <div className="relative w-9 h-9 rounded-full p-[1px] bg-gradient-to-b from-white/20 via-[#D4FF00]/40 to-transparent shadow-[0_0_12px_rgba(212,255,0,0.15)]">
               <div className="w-full h-full rounded-full overflow-hidden bg-[#0A0A0F] flex items-center justify-center">
                 {activeProfile.avatar?.startsWith('http') ? (
@@ -398,42 +358,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* Nombre y etiqueta de rendimiento */}
-            {editingName ? (
-              <input
-                autoFocus
-                className="bg-white/[0.05] border border-[#D4FF00] rounded-lg px-2 py-0.5 text-white text-xs font-bold focus:outline-none"
-                defaultValue={activeProfile.name}
-                onBlur={(e) => {
-                  handleUpdateProfileName(e.target.value);
-                  setEditingName(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleUpdateProfileName(e.target.value);
-                    setEditingName(false);
-                  } else if (e.key === 'Escape') setEditingName(false);
-                }}
-              />
-            ) : (
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile.name}</span>
-                  <button
-                    onClick={() => setEditingName(true)}
-                    className="p-0.5 text-zinc-500 hover:text-white transition-colors"
-                  >
-                    <Edit3 size={10} />
-                  </button>
-                </div>
-                <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#D4FF00]/80 uppercase block">
-                  {activeProfile.role || 'ATLETA PRO'}
-                </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile.name}</span>
               </div>
-            )}
+              <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#D4FF00]/80 uppercase block">
+                {activeProfile.role || 'ATLETA PRO'}
+              </span>
+            </div>
           </div>
 
-          {/* Acciones de administración y cambio de perfil */}
           <div className="flex items-center gap-2">
             {activeProfile.id === 'adrian' && (
               <>
@@ -458,10 +392,7 @@ export default function App() {
             )}
 
             <button
-              onClick={() => {
-                setActiveProfile(null);
-                setEditingName(false);
-              }}
+              onClick={handleLogout}
               className="text-[10px] font-mono tracking-widest font-extrabold uppercase border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 rounded-full text-zinc-400 hover:text-white hover:border-[#D4FF00]/40 transition-all active:scale-95"
             >
               Cambiar
@@ -469,12 +400,12 @@ export default function App() {
           </div>
         </header>
 
-        {/* Contenedor principal de vistas */}
+        {/* Vista activa */}
         <div className="flex-1 overflow-y-auto flex flex-col overscroll-none touch-pan-y no-scrollbar">
           {renderContent()}
         </div>
 
-        {/* Dock de navegación flotante */}
+        {/* Navegación inferior */}
         <BottomNav
           activeTab={currentTab}
           setActiveTab={setCurrentTab}

@@ -1,5 +1,6 @@
+// src/components/ProgressPhotos.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, X, Trash2, Sliders, ArrowLeftRight, Image as ImageIcon, ArrowLeft, Loader2 } from 'lucide-react';
+import { Camera, X, Trash2, ArrowLeftRight, Image as ImageIcon, ArrowLeft, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 const BUCKET_NAME = 'progress-photos';
@@ -16,7 +17,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
   const fileRef = useRef();
   const sliderRef = useRef();
 
-  // --- Lógica original sin cambios (carga, subida, eliminación, selección, slider) ---
   useEffect(() => {
     const loadPhotos = async () => {
       const cached = localStorage.getItem(STORAGE_KEY(activeProfile.id));
@@ -151,11 +151,10 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
   }, [handleSliderMove, stopDrag]);
 
   return (
-    <div className="flex flex-col h-full animate-fade-in pb-12 relative overflow-hidden bg-[#09090B]">
-      {/* Fondo ambiental */}
+    <div className="flex flex-col h-full animate-fade-in pb-12 relative overflow-hidden bg-[#09090B] select-none">
       <div className="absolute top-0 right-0 w-40 h-40 bg-[#D4FF00]/[0.03] rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
-      {/* Header optimizado para pulgares */}
+      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 relative z-10">
         <button 
           onClick={onBack} 
@@ -164,7 +163,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         >
           <ArrowLeft size={20} />
         </button>
-        <h2 className="text-lg font-semibold text-white tracking-tight">Progreso</h2>
+        <h2 className="text-lg font-semibold text-white tracking-tight">Fotos de Progreso</h2>
         <button
           onClick={() => fileRef.current.click()}
           disabled={uploading}
@@ -176,7 +175,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
       </div>
 
-      {/* Indicador de subida más elegante */}
       {uploading && (
         <div className="px-5 mb-3 relative z-10">
           <div className="bg-white/[0.02] border border-white/[0.05] backdrop-blur-xl rounded-2xl px-4 py-3 flex items-center gap-3 text-xs text-zinc-400">
@@ -186,7 +184,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         </div>
       )}
 
-      {/* Contenido principal */}
+      {/* Comparador táctil */}
       {compareMode && leftPhoto && rightPhoto ? (
         <div className="flex-1 flex flex-col px-5 space-y-4 relative z-10">
           <div className="flex justify-between items-center bg-white/[0.02] border border-white/[0.05] backdrop-blur-sm p-3 rounded-2xl">
@@ -196,7 +194,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
             >
               ← Volver
             </button>
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
               <span className="font-medium">{new Date(leftPhoto.created_at).toLocaleDateString()}</span>
               <span className="text-[#D4FF00] font-bold">VS</span>
               <span className="font-medium">{new Date(rightPhoto.created_at).toLocaleDateString()}</span>
@@ -204,7 +202,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
           </div>
 
           <div 
-            className="relative w-full aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 border border-white/[0.08] shadow-2xl shadow-black/30" 
+            className="relative w-full aspect-[3/4] rounded-3xl overflow-hidden bg-zinc-900 border border-white/[0.08] shadow-2xl shadow-black/30 touch-none" 
             ref={sliderRef}
           >
             <img src={rightPhoto.url} alt="Después" className="absolute inset-0 w-full h-full object-cover" />
@@ -216,7 +214,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
                 style={{ width: `${100 / (sliderPos / 100)}%`, maxWidth: 'none' }} 
               />
             </div>
-            {/* Línea divisoria premium */}
+            
             <div
               className="absolute top-0 bottom-0 w-0.5 bg-[#D4FF00]/80 shadow-[0_0_12px_rgba(212,255,0,0.5)] cursor-ew-resize z-10 flex items-center justify-center transition-shadow duration-200"
               style={{ left: `${sliderPos}%` }}
@@ -248,9 +246,9 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
               {selectedPhotos.length === 2 && (
                 <button
                   onClick={startCompare}
-                  className="mb-4 w-full py-4 bg-[#D4FF00] text-[#09090B] font-bold rounded-2xl text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-[#e5ff1a] active:scale-[0.98] transition-all shadow-lg shadow-[#D4FF00]/20"
+                  className="mb-4 w-full py-4 volt-button rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)]"
                 >
-                  <ArrowLeftRight size={16} strokeWidth={2} />
+                  <ArrowLeftRight size={16} strokeWidth={2.5} />
                   Comparar seleccionadas
                 </button>
               )}
@@ -270,14 +268,12 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
                     >
                       <img src={photo.url} alt="Progreso" className="w-full h-full object-cover" loading="lazy" />
                       
-                      {/* Fecha superpuesta minimalista */}
                       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
-                        <span className="text-[11px] font-medium text-white/80">
+                        <span className="text-[11px] font-mono font-medium text-white/80">
                           {new Date(photo.created_at).toLocaleDateString()}
                         </span>
                       </div>
 
-                      {/* Botón eliminar con área de toque amplia */}
                       <button
                         onClick={(e) => { 
                           e.stopPropagation(); 
@@ -289,7 +285,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
                         <Trash2 size={14} />
                       </button>
 
-                      {/* Indicador de selección */}
                       {isSelected && (
                         <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-[#D4FF00] flex items-center justify-center text-[#09090B] text-xs font-bold shadow-lg">
                           ✓

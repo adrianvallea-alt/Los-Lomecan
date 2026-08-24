@@ -1,29 +1,33 @@
 // src/lib/dataService.js
 import { supabase } from './supabaseClient';
 
+// Helper con Timeout para que NUNCA se congele en datos móviles
+const fetchWithTimeout = async (promise, timeoutMs = 2500) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Network timeout')), timeoutMs)
+    )
+  ]);
+};
+
 // ==================== HELPER DE CACHÉ OFFLINE-FIRST ====================
 const cacheOrFetch = async (key, fetcher) => {
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
-
-  if (isOffline) {
+  // 1. Si no hay conexión evidente, devolver caché de inmediato
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const cached = localStorage.getItem(key);
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
+    return cached ? JSON.parse(cached) : null;
   }
 
   try {
-    const data = await fetcher();
+    // 2. Intentar red con límite de 2.5s (vital para datos móviles)
+    const data = await fetchWithTimeout(fetcher(), 2500);
     if (data !== null && data !== undefined) {
       localStorage.setItem(key, JSON.stringify(data));
     }
     return data;
   } catch (error) {
+    // 3. Si la red móvil falla o tarda, usar la caché sin bloquear al usuario
     const cached = localStorage.getItem(key);
     if (cached) {
       try {
@@ -257,7 +261,6 @@ export async function saveWorkoutSession(profileId, session) {
 
   if (sessionError) throw sessionError;
 
-  // Sanitizar series para evitar errores 400 de tipos en PostgreSQL
   const setsToInsert = [];
   for (const exercise of session.exercises || []) {
     for (const set of exercise.sets || []) {
@@ -356,6 +359,5 @@ export async function saveFood(food) {
   if (error) throw error;
 }
 
-// ==================== ALIASES ====================
 export const saveRoutine = saveUserRoutine;
 export const deleteRoutine = deleteUserRoutine;

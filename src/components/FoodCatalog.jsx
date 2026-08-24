@@ -1,12 +1,13 @@
 // src/components/FoodCatalog.jsx
 import React, { useState, useEffect, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { 
-  Search, Plus, X, Sparkles, Barcode, Save, Edit3, 
-  Check, Scale 
+  Search, Plus, X, Sparkles, Barcode, Scale, Edit3, Check, Zap, Lightbulb
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import BarcodeScanner from './BarcodeScanner';
 import { getFoodByBarcode, searchFoods } from '../utils/openFoodFacts';
+import MealPlannerModal from './MealPlannerModal';
 
 const FILTER_TAGS = [
   { id: 'all', label: 'Todos' },
@@ -15,7 +16,7 @@ const FILTER_TAGS = [
   { id: 'custom', label: '⭐ Mis Alimentos' },
 ];
 
-export default function FoodCatalog({ onAddToDay }) {
+export default function FoodCatalog({ onAddToDay, goals }) {
   const [foods, setFoods] = useState([]);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
@@ -24,9 +25,9 @@ export default function FoodCatalog({ onAddToDay }) {
   const [selectedGrams, setSelectedGrams] = useState(100);
   const [showScanner, setShowScanner] = useState(false);
   const [showCustomForm, setShowCustomForm] = useState(false);
+  const [showMealPlanner, setShowMealPlanner] = useState(false);
   const [editingFood, setEditingFood] = useState(null);
 
-  // Formulario personalizado
   const [customName, setCustomName] = useState('');
   const [customBrand, setCustomBrand] = useState('');
   const [customCal, setCustomCal] = useState('');
@@ -35,7 +36,6 @@ export default function FoodCatalog({ onAddToDay }) {
   const [customFat, setCustomFat] = useState('');
   const [customBarcode, setCustomBarcode] = useState('');
 
-  // Cargar alimentos de caché o Supabase
   const loadAllFoods = async () => {
     setLoading(true);
     try {
@@ -67,7 +67,6 @@ export default function FoodCatalog({ onAddToDay }) {
     loadAllFoods();
   }, []);
 
-  // Búsqueda combinada: Supabase + OpenFoodFacts
   useEffect(() => {
     if (!search.trim()) {
       loadAllFoods();
@@ -120,7 +119,6 @@ export default function FoodCatalog({ onAddToDay }) {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Auto-cálculo de calorías en formulario
   useEffect(() => {
     if (customPro || customCarb || customFat) {
       const p = parseFloat(customPro) || 0;
@@ -188,6 +186,14 @@ export default function FoodCatalog({ onAddToDay }) {
     }
   };
 
+  const handleQuickAdd100g = (e, food) => {
+    e.stopPropagation();
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(30);
+    }
+    onAddToDay(food, 100);
+  };
+
   const handleSaveCustomFood = async () => {
     if (!customName.trim() || !customCal) return;
 
@@ -240,6 +246,16 @@ export default function FoodCatalog({ onAddToDay }) {
     setShowCustomForm(false);
   };
 
+  const handleApplyFullPlan = (planItems) => {
+    planItems.forEach(({ food, grams }) => {
+      onAddToDay(food, grams);
+    });
+  };
+
+  const handleAddSingleMealFromPlan = (food, grams) => {
+    onAddToDay(food, grams);
+  };
+
   const filteredFoods = useMemo(() => {
     return foods.filter(f => {
       if (activeFilter === 'high_pro') return (f.pro || 0) >= 15;
@@ -261,15 +277,25 @@ export default function FoodCatalog({ onAddToDay }) {
   }, [selectedFood, selectedGrams]);
 
   return (
-    <div className="flex-1 flex flex-col relative pb-32 no-scrollbar select-none bg-[#09090B] overflow-x-hidden">
+    <div className="flex-1 flex flex-col min-h-0 relative bg-[#09090B] overflow-hidden select-none">
       
-      {/* Header */}
+      {/* Header con botón para Ideas de Menú */}
       <div className="px-5 pt-3 pb-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-[#D4FF00]" />
-          <h2 className="text-xl font-black text-white tracking-tight">Alimentos</h2>
+          <h2 className="text-xl font-black text-white tracking-tight">Catálogo</h2>
         </div>
+        
         <div className="flex items-center gap-2">
+          {/* ✅ Botón de Ideas de Menú / MealPlanner */}
+          <button
+            onClick={() => setShowMealPlanner(true)}
+            className="px-3 py-2 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] text-xs font-mono font-bold flex items-center gap-1.5 active:scale-95 transition-all shadow-[0_0_12px_rgba(212,255,0,0.15)]"
+            title="Ver sugerencias de comidas balanceadas"
+          >
+            <Lightbulb size={14} /> Ideas
+          </button>
+
           <button
             onClick={() => {
               setEditingFood(null);
@@ -280,6 +306,7 @@ export default function FoodCatalog({ onAddToDay }) {
           >
             <Plus size={18} />
           </button>
+          
           <button
             onClick={() => setShowScanner(true)}
             className="p-2.5 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00]/20 active:scale-95 transition-all shadow-[0_0_15px_rgba(212,255,0,0.15)]"
@@ -298,7 +325,7 @@ export default function FoodCatalog({ onAddToDay }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, pollo, avena, marca..."
+            placeholder="Buscar por nombre, marca o ingrediente..."
             className="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl pl-10 pr-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-[#D4FF00]/50 outline-none transition-colors"
           />
           {search && (
@@ -312,8 +339,8 @@ export default function FoodCatalog({ onAddToDay }) {
         </div>
       </div>
 
-      {/* ✅ Filtros rápidos (Chips corregidos con scroll elástico sin corte) */}
-      <div className="w-full mb-4 shrink-0 overflow-x-auto no-scrollbar touch-pan-x">
+      {/* Chips de filtro */}
+      <div className="w-full mb-3 shrink-0 overflow-x-auto no-scrollbar touch-pan-x">
         <div className="flex gap-2 px-5 w-max">
           {FILTER_TAGS.map(tag => (
             <button
@@ -328,16 +355,15 @@ export default function FoodCatalog({ onAddToDay }) {
               {tag.label}
             </button>
           ))}
-          {/* Espaciador final para asegurar que el último chip no toque el borde */}
           <div className="w-3 shrink-0" />
         </div>
       </div>
 
-      {/* Listado de alimentos */}
-      <div className="flex-1 overflow-y-auto px-5 space-y-2.5 no-scrollbar">
+      {/* Listado de alimentos sin espacio negro */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 space-y-2.5 pb-32 no-scrollbar">
         {loading && (
           <div className="py-8 text-center text-xs font-mono text-zinc-500 tracking-wider">
-            Buscando alimentos...
+            Sincronizando alimentos...
           </div>
         )}
 
@@ -355,16 +381,11 @@ export default function FoodCatalog({ onAddToDay }) {
         )}
 
         {!loading && filteredFoods.map(food => {
-          const isSelected = selectedFood?.id === food.id || (food.barcode && selectedFood?.barcode === food.barcode);
           return (
             <div
               key={food.id || food.barcode}
               onClick={() => handleSelectFood(food)}
-              className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 ${
-                isSelected
-                  ? 'bg-[#D4FF00]/10 border-[#D4FF00]/50 shadow-[0_0_15px_rgba(212,255,0,0.1)]'
-                  : 'bg-white/[0.02] border-white/[0.05] hover:border-white/10 active:scale-[0.99]'
-              }`}
+              className="p-3.5 rounded-2xl border bg-white/[0.02] border-white/[0.05] hover:border-white/10 active:scale-[0.99] transition-all duration-200 cursor-pointer flex items-center justify-between gap-3"
             >
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold text-xs truncate">{food.name}</p>
@@ -377,111 +398,142 @@ export default function FoodCatalog({ onAddToDay }) {
                 </div>
               </div>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingFood(food);
-                  setCustomName(food.name);
-                  setCustomBrand(food.brand || '');
-                  setCustomCal(food.cal.toString());
-                  setCustomPro(food.pro.toString());
-                  setCustomCarb(food.carb.toString());
-                  setCustomFat(food.fat.toString());
-                  setCustomBarcode(food.barcode || '');
-                  setShowCustomForm(true);
-                }}
-                className="p-2 rounded-xl bg-white/[0.03] text-zinc-500 hover:text-white"
-                title="Editar alimento"
-              >
-                <Edit3 size={13} />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={(e) => handleQuickAdd100g(e, food)}
+                  className="px-2.5 py-1.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] rounded-xl text-[10px] font-bold active:scale-90 transition-all flex items-center gap-0.5"
+                  title="Añadir 100g directamente"
+                >
+                  <Zap size={11} /> +100g
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingFood(food);
+                    setCustomName(food.name);
+                    setCustomBrand(food.brand || '');
+                    setCustomCal(food.cal.toString());
+                    setCustomPro(food.pro.toString());
+                    setCustomCarb(food.carb.toString());
+                    setCustomFat(food.fat.toString());
+                    setCustomBarcode(food.barcode || '');
+                    setShowCustomForm(true);
+                  }}
+                  className="p-2 rounded-xl bg-white/[0.03] text-zinc-500 hover:text-white"
+                  title="Editar alimento"
+                >
+                  <Edit3 size={13} />
+                </button>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Modal inferior flotante: Añadir porción rápida */}
-      {selectedFood && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0A0A0C]/95 backdrop-blur-2xl border-t border-[#D4FF00]/20 p-5 rounded-t-[2.5rem] shadow-[0_-10px_30px_rgba(0,0,0,0.8)] animate-slide-up">
-          <div className="max-w-md mx-auto space-y-4">
-            
-            {/* Header del producto seleccionado */}
+      {/* Modal: Añadir porción */}
+      {selectedFood && ReactDOM.createPortal(
+        <div 
+          className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-end justify-center animate-fade-in"
+          onClick={() => setSelectedFood(null)}
+        >
+          <div 
+            className="w-full max-w-md bg-[#0C0C12] border-t border-white/[0.12] rounded-t-[2.5rem] p-6 shadow-[0_-20px_50px_rgba(0,0,0,0.95)] animate-slide-up space-y-4"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 24px) + 24px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-2" />
+
             <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-white font-bold text-sm truncate max-w-[240px]">{selectedFood.name}</h3>
-                <p className="text-[10px] text-zinc-400 mt-0.5">{selectedFood.brand || 'Alimento'} · Base 100g</p>
+              <div className="min-w-0 pr-2">
+                <h3 className="text-white font-extrabold text-base truncate">{selectedFood.name}</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">{selectedFood.brand || 'Alimento'} · Base 100g</p>
               </div>
               <button
                 onClick={() => setSelectedFood(null)}
-                className="p-1 text-zinc-500 hover:text-white"
+                className="p-2 rounded-full bg-white/[0.05] text-zinc-400 hover:text-white"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Selector de gramos */}
-            <div className="flex items-center justify-between gap-3 bg-white/[0.03] border border-white/[0.06] p-2.5 rounded-2xl">
-              <span className="text-xs font-semibold text-zinc-400 pl-2">Cantidad (gramos):</span>
-              <div className="flex items-center gap-2">
-                {[50, 100, 150, 200].map(g => (
+            <div className="bg-white/[0.03] border border-white/[0.06] p-3 rounded-2xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-300">Cantidad:</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={selectedGrams}
+                    onChange={(e) => setSelectedGrams(Math.max(1, parseInt(e.target.value) || 0))}
+                    className="w-20 bg-black border border-white/[0.15] rounded-xl text-center text-sm font-bold text-[#D4FF00] py-2 outline-none focus:border-[#D4FF00]"
+                  />
+                  <span className="text-xs font-mono font-bold text-zinc-400">gramos</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                {[50, 100, 150, 200, 250].map(g => (
                   <button
                     key={g}
                     type="button"
                     onClick={() => setSelectedGrams(g)}
-                    className={`px-2.5 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
                       selectedGrams === g
-                        ? 'bg-[#D4FF00] text-[#09090B]'
+                        ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_10px_rgba(212,255,0,0.4)]'
                         : 'bg-white/[0.04] text-zinc-400 hover:text-white'
                     }`}
                   >
                     {g}g
                   </button>
                 ))}
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={selectedGrams}
-                  onChange={(e) => setSelectedGrams(Math.max(1, parseInt(e.target.value) || 0))}
-                  className="w-16 bg-black/60 border border-white/[0.1] rounded-xl text-center text-xs font-bold text-white py-1.5 outline-none focus:border-[#D4FF00]"
-                />
               </div>
             </div>
 
-            {/* Macros resultantes de la porción */}
-            <div className="grid grid-cols-4 gap-2 text-center text-[10px] bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-2xl font-mono">
+            <div className="grid grid-cols-4 gap-2 text-center text-[10px] bg-white/[0.02] border border-white/[0.04] p-3 rounded-2xl font-mono">
               <div>
                 <span className="text-zinc-500 block">Kcal</span>
-                <span className="text-white font-bold">{currentMacros.cal}</span>
+                <span className="text-sm text-white font-black">{currentMacros.cal}</span>
               </div>
               <div>
                 <span className="text-blue-400 block">Proteína</span>
-                <span className="text-white font-bold">{currentMacros.pro}g</span>
+                <span className="text-sm text-white font-black">{currentMacros.pro}g</span>
               </div>
               <div>
                 <span className="text-purple-400 block">Carbos</span>
-                <span className="text-white font-bold">{currentMacros.carb}g</span>
+                <span className="text-sm text-white font-black">{currentMacros.carb}g</span>
               </div>
               <div>
                 <span className="text-amber-400 block">Grasas</span>
-                <span className="text-white font-bold">{currentMacros.fat}g</span>
+                <span className="text-sm text-white font-black">{currentMacros.fat}g</span>
               </div>
             </div>
 
-            {/* Botón de confirmación */}
             <button
               onClick={handleConfirmAdd}
-              className="w-full py-3.5 bg-[#D4FF00] text-[#09090B] font-black rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] hover:bg-[#e5ff1a]"
+              className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-[0_0_25px_rgba(212,255,0,0.4)]"
             >
-              <Check size={16} strokeWidth={2.5} />
+              <Check size={18} strokeWidth={3} />
               Añadir a mi día ({selectedGrams}g)
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Ideas de Menús */}
+      {showMealPlanner && (
+        <MealPlannerModal
+          goals={goals}
+          onApplyPlan={handleApplyFullPlan}
+          onAddSingleMeal={handleAddSingleMealFromPlan}
+          onClose={() => setShowMealPlanner(false)}
+        />
       )}
 
       {/* Modal: Crear / Editar Alimento */}
       {showCustomForm && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-sm bg-[#0A0A0C] border border-white/[0.08] rounded-3xl p-5 space-y-4 shadow-2xl animate-scale-in">
             <div className="flex justify-between items-center">
               <h3 className="text-white font-bold text-sm">
@@ -576,7 +628,6 @@ export default function FoodCatalog({ onAddToDay }) {
         </div>
       )}
 
-      {/* Escáner de código de barras */}
       {showScanner && (
         <BarcodeScanner
           onDetected={handleBarcode}
