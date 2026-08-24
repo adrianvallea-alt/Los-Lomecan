@@ -1,6 +1,10 @@
 // src/components/ProgressPhotos.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Camera, X, Trash2, ArrowLeftRight, Image as ImageIcon, ArrowLeft, Loader2 } from 'lucide-react';
+import ReactDOM from 'react-dom';
+import { 
+  Camera, X, Trash2, ArrowLeftRight, Image as ImageIcon, ArrowLeft, 
+  Loader2, ChevronLeft, ChevronRight, Share2 
+} from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 const BUCKET_NAME = 'progress-photos';
@@ -14,6 +18,10 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
   const [rightPhoto, setRightPhoto] = useState(null);
   const [sliderPos, setSliderPos] = useState(50);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  
+  // Estado para el visor de foto en pantalla completa (Lightbox)
+  const [viewingPhotoIndex, setViewingPhotoIndex] = useState(null);
+
   const fileRef = useRef();
   const sliderRef = useRef();
 
@@ -92,6 +100,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
       if (leftPhoto?.id === photo.id) setLeftPhoto(null);
       if (rightPhoto?.id === photo.id) setRightPhoto(null);
       setSelectedPhotos(prev => prev.filter(p => p.id !== photo.id));
+      if (viewingPhotoIndex !== null) setViewingPhotoIndex(null);
     } catch (err) {
       console.error('Error al eliminar:', err);
     }
@@ -150,6 +159,19 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
     };
   }, [handleSliderMove, stopDrag]);
 
+  // Navegación dentro del visor de fotos
+  const currentViewingPhoto = viewingPhotoIndex !== null ? photos[viewingPhotoIndex] : null;
+
+  const handlePrevPhoto = (e) => {
+    e?.stopPropagation();
+    if (viewingPhotoIndex > 0) setViewingPhotoIndex(viewingPhotoIndex - 1);
+  };
+
+  const handleNextPhoto = (e) => {
+    e?.stopPropagation();
+    if (viewingPhotoIndex < photos.length - 1) setViewingPhotoIndex(viewingPhotoIndex + 1);
+  };
+
   return (
     <div className="flex flex-col h-full animate-fade-in pb-12 relative overflow-hidden bg-[#09090B] select-none">
       <div className="absolute top-0 right-0 w-40 h-40 bg-[#D4FF00]/[0.03] rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
@@ -184,7 +206,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         </div>
       )}
 
-      {/* Comparador táctil */}
+      {/* Modo Comparar con Slider */}
       {compareMode && leftPhoto && rightPhoto ? (
         <div className="flex-1 flex flex-col px-5 space-y-4 relative z-10">
           <div className="flex justify-between items-center bg-white/[0.02] border border-white/[0.05] backdrop-blur-sm p-3 rounded-2xl">
@@ -253,43 +275,54 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
                 </button>
               )}
 
+              {/* Grid de fotos */}
               <div className="grid grid-cols-2 gap-4 pb-24">
-                {photos.map(photo => {
+                {photos.map((photo, idx) => {
                   const isSelected = selectedPhotos.some(p => p.id === photo.id);
                   return (
                     <div
                       key={photo.id}
-                      onClick={() => toggleSelect(photo)}
+                      onClick={() => setViewingPhotoIndex(idx)}
                       className={`relative rounded-2xl overflow-hidden border aspect-square cursor-pointer transition-all duration-300 bg-zinc-900/40 backdrop-blur-sm ${
                         isSelected 
-                          ? 'border-[#D4FF00]/60 ring-1 ring-[#D4FF00]/30 shadow-lg shadow-[#D4FF00]/10 scale-[0.97]' 
-                          : 'border-white/[0.05] hover:border-white/10 hover:scale-[1.02]'
+                          ? 'border-[#D4FF00]/60 ring-2 ring-[#D4FF00]/40 scale-[0.97]' 
+                          : 'border-white/[0.05] hover:border-white/10 active:scale-95'
                       }`}
                     >
                       <img src={photo.url} alt="Progreso" className="w-full h-full object-cover" loading="lazy" />
                       
-                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
-                        <span className="text-[11px] font-mono font-medium text-white/80">
+                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                        <span className="text-[11px] font-mono font-medium text-white/90">
                           {new Date(photo.created_at).toLocaleDateString()}
                         </span>
                       </div>
 
+                      {/* Botón para seleccionar y comparar */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelect(photo);
+                        }}
+                        className={`absolute top-2 left-2 px-2 py-1 rounded-lg text-[9px] font-mono font-bold transition-all ${
+                          isSelected
+                            ? 'bg-[#D4FF00] text-black shadow-md'
+                            : 'bg-black/60 text-white/80 border border-white/10 hover:border-[#D4FF00]'
+                        }`}
+                      >
+                        {isSelected ? '✓ Seleccionada' : 'Comparar'}
+                      </button>
+
+                      {/* Botón eliminar */}
                       <button
                         onClick={(e) => { 
                           e.stopPropagation(); 
                           handleDelete(photo); 
                         }}
-                        className="absolute top-2 right-2 p-2 rounded-full bg-black/60 border border-white/10 text-zinc-300 hover:text-red-400 hover:border-red-400/30 active:scale-90 transition-all backdrop-blur-md"
+                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 border border-white/10 text-zinc-300 hover:text-red-400 active:scale-90 transition-all backdrop-blur-md"
                         aria-label="Eliminar foto"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
-
-                      {isSelected && (
-                        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-[#D4FF00] flex items-center justify-center text-[#09090B] text-xs font-bold shadow-lg">
-                          ✓
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -297,6 +330,76 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
             </>
           )}
         </div>
+      )}
+
+      {/* ✅ LIGHTBOX: VISOR DE FOTO EN PANTALLA COMPLETA CON NAVEGACIÓN */}
+      {currentViewingPhoto && ReactDOM.createPortal(
+        <div 
+          className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-2xl flex flex-col justify-between p-4 animate-fade-in select-none"
+          onClick={() => setViewingPhotoIndex(null)}
+        >
+          {/* Header del Lightbox */}
+          <div className="flex items-center justify-between pt-2 z-10" onClick={e => e.stopPropagation()}>
+            <div className="text-left">
+              <span className="text-[10px] font-mono uppercase text-[#D4FF00] font-bold">Foto de Progreso</span>
+              <p className="text-white text-xs font-mono font-bold">
+                {new Date(currentViewingPhoto.created_at).toLocaleDateString()} · ({viewingPhotoIndex + 1}/{photos.length})
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleDelete(currentViewingPhoto)}
+                className="p-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-zinc-400 hover:text-red-400 active:scale-95"
+                title="Eliminar foto"
+              >
+                <Trash2 size={16} />
+              </button>
+              <button
+                onClick={() => setViewingPhotoIndex(null)}
+                className="p-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-zinc-400 hover:text-white active:scale-95"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Imagen Central con Flechas */}
+          <div className="relative flex-1 flex items-center justify-center my-auto overflow-hidden">
+            <img 
+              src={currentViewingPhoto.url} 
+              alt="Foto en grande" 
+              className="max-h-[75vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/[0.08]"
+              onClick={e => e.stopPropagation()}
+            />
+
+            {/* Flecha Anterior */}
+            {viewingPhotoIndex > 0 && (
+              <button
+                onClick={handlePrevPhoto}
+                className="absolute left-2 p-3 rounded-full bg-black/70 border border-white/20 text-white hover:bg-[#D4FF00] hover:text-black transition-all active:scale-90 shadow-xl backdrop-blur-md"
+              >
+                <ChevronLeft size={22} />
+              </button>
+            )}
+
+            {/* Flecha Siguiente */}
+            {viewingPhotoIndex < photos.length - 1 && (
+              <button
+                onClick={handleNextPhoto}
+                className="absolute right-2 p-3 rounded-full bg-black/70 border border-white/20 text-white hover:bg-[#D4FF00] hover:text-black transition-all active:scale-90 shadow-xl backdrop-blur-md"
+              >
+                <ChevronRight size={22} />
+              </button>
+            )}
+          </div>
+
+          {/* Footer del Lightbox */}
+          <div className="text-center pb-4 z-10 font-mono text-[10px] text-zinc-500">
+            Toca fuera o la X para cerrar · Desliza con las flechas
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

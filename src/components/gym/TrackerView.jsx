@@ -125,7 +125,6 @@ export default function TrackerView({
   const exerciseRefs = useRef({});
   const DRAFT_KEY = `draft_${activeRoutine.id}_${activeDayIndex}`;
 
-  // Screen Wake Lock API
   useEffect(() => {
     let wakeLock = null;
     const requestWakeLock = async () => {
@@ -388,7 +387,6 @@ export default function TrackerView({
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[100] bg-[#050507] flex flex-col h-[100dvh] w-full select-none overflow-hidden animate-fade-in">
       
-      {/* Confeti al batir récord */}
       {newPrCelebration && <ConfettiCanvas />}
 
       {/* Modal Celebración de PR */}
@@ -464,7 +462,7 @@ export default function TrackerView({
         </div>
       )}
 
-      {/* Header Superior */}
+      {/* Header */}
       <div className="flex justify-between items-center px-5 pt-4 pb-2.5 shrink-0 bg-[#050507]/95 backdrop-blur-2xl z-10 border-b border-white/[0.05]">
         <div className="min-w-0 flex-1 pr-2">
           <div className="flex items-center gap-2">
@@ -501,7 +499,7 @@ export default function TrackerView({
         </div>
       </div>
 
-      {/* ✅ LISTADO DE EJERCICIOS CON pb-44 PARA QUE NADA QUEDE OCULTO DETRÁS DEL FOOTER */}
+      {/* Listado de ejercicios */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-44 space-y-3 touch-pan-y no-scrollbar">
         {exercises.map((ex, exIdx) => {
           const exKey = ex.libraryExerciseId || ex.id;
@@ -612,39 +610,43 @@ export default function TrackerView({
                     </button>
                   </div>
 
+                  {/* Encabezado con anchos proporcionales */}
                   <div className="grid grid-cols-12 text-center text-[9px] font-mono font-black text-zinc-500 uppercase tracking-widest px-1">
-                    <div className="col-span-2">SERIE</div>
+                    <div className="col-span-1">#</div>
                     <div className="col-span-4">PESO (KG)</div>
                     <div className="col-span-2">RIR</div>
-                    <div className="col-span-3">REPS</div>
-                    <div className="col-span-1">LISTO</div>
+                    <div className="col-span-4">REPETICIONES</div>
+                    <div className="col-span-1">✓</div>
                   </div>
 
+                  {/* Filas de series calibradas ergonómicamente */}
                   {ex.sets.map((set, setIdx) => (
                     <div
                       key={set.id}
-                      className={`grid grid-cols-12 items-center gap-1.5 py-2 px-2.5 rounded-2xl border transition-all ${
+                      className={`grid grid-cols-12 items-center gap-1 py-2 px-2 rounded-2xl border transition-all ${
                         set.done
                           ? 'bg-[#D4FF00]/10 border-[#D4FF00]/40 shadow-[0_0_15px_rgba(212,255,0,0.15)]'
                           : 'bg-[#050507]/60 border-white/[0.05]'
                       }`}
                     >
-                      <div className="col-span-2 flex justify-center">
-                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-black ${
-                          set.done ? 'bg-[#D4FF00] text-[#050507] shadow-[0_0_8px_#D4FF00]' : 'bg-white/[0.04] border border-white/[0.08] text-[#D4FF00]'
+                      {/* Número de Serie */}
+                      <div className="col-span-1 flex justify-center">
+                        <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-mono font-black ${
+                          set.done ? 'bg-[#D4FF00] text-[#050507]' : 'bg-white/[0.04] text-[#D4FF00]'
                         }`}>
                           {set.setNum || setIdx + 1}
                         </span>
                       </div>
 
-                      <div className="col-span-4 flex items-center justify-center gap-1">
+                      {/* Peso con Steppers compactos */}
+                      <div className="col-span-4 flex items-center justify-center gap-0.5">
                         <button
                           type="button"
                           disabled={set.done}
                           onClick={() => handleWeightStep(ex.id, set.id, -2.5)}
-                          className="w-6 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all"
+                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
                         >
-                          <Minus size={10} />
+                          <Minus size={9} />
                         </button>
                         <input
                           type="number"
@@ -654,39 +656,41 @@ export default function TrackerView({
                           disabled={set.done}
                           onChange={e => updateSetInput(ex.id, set.id, 'weight', e.target.value)}
                           placeholder="0"
-                          className="w-12 h-8 bg-black/60 border border-white/[0.08] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
+                          className="w-10 h-7 bg-black/70 border border-white/[0.1] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
                         />
                         <button
                           type="button"
                           disabled={set.done}
                           onClick={() => handleWeightStep(ex.id, set.id, 2.5)}
-                          className="w-6 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all"
+                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
                         >
-                          <Plus size={10} />
+                          <Plus size={9} />
                         </button>
                       </div>
 
+                      {/* Selector Compacto de RIR (Sin desborde) */}
                       <div className="col-span-2 flex justify-center">
                         <select
                           disabled={set.done}
                           value={set.rir ?? 2}
                           onChange={e => updateSetInput(ex.id, set.id, 'rir', parseInt(e.target.value))}
-                          className="bg-black/60 border border-white/[0.08] rounded-lg text-[10px] font-mono font-bold text-[#D4FF00] py-1 px-1 outline-none text-center disabled:opacity-50"
-                          title="Reps en Reserva antes del fallo"
+                          className="w-full bg-black/70 border border-white/[0.1] rounded-lg text-[10px] font-mono font-black text-[#D4FF00] py-1 text-center outline-none disabled:opacity-50 cursor-pointer"
+                          title="Reps en Reserva (RIR)"
                         >
-                          <option value={0}>RIR 0 (Fallo)</option>
-                          <option value={1}>RIR 1</option>
-                          <option value={2}>RIR 2</option>
-                          <option value={3}>RIR 3+</option>
+                          <option value={0}>R0</option>
+                          <option value={1}>R1</option>
+                          <option value={2}>R2</option>
+                          <option value={3}>R3+</option>
                         </select>
                       </div>
 
-                      <div className="col-span-3 flex items-center justify-center gap-1">
+                      {/* Reps con Steppers compactos */}
+                      <div className="col-span-4 flex items-center justify-center gap-0.5">
                         <button
                           type="button"
                           disabled={set.done}
                           onClick={() => handleRepsStep(ex.id, set.id, -1)}
-                          className="w-5 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all"
+                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
                         >
                           <Minus size={9} />
                         </button>
@@ -697,29 +701,30 @@ export default function TrackerView({
                           placeholder={set.reps || '10'}
                           disabled={set.done}
                           onChange={e => updateSetInput(ex.id, set.id, 'repsDone', e.target.value)}
-                          className="w-10 h-8 bg-black/60 border border-white/[0.08] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
+                          className="w-10 h-7 bg-black/70 border border-white/[0.1] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
                         />
                         <button
                           type="button"
                           disabled={set.done}
                           onClick={() => handleRepsStep(ex.id, set.id, 1)}
-                          className="w-5 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all"
+                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
                         >
                           <Plus size={9} />
                         </button>
                       </div>
 
+                      {/* Check */}
                       <div className="col-span-1 flex justify-center">
                         <button
                           type="button"
                           onClick={() => toggleSetDone(ex.id, set.id)}
-                          className={`w-7 h-7 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all active:scale-90 shrink-0 ${
                             set.done
-                              ? 'bg-[#D4FF00] text-[#050507] shadow-[0_0_12px_rgba(212,255,0,0.6)]'
-                              : 'bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:border-[#D4FF00]/40'
+                              ? 'bg-[#D4FF00] text-[#050507] shadow-[0_0_10px_rgba(212,255,0,0.6)]'
+                              : 'bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white'
                           }`}
                         >
-                          <Check size={13} strokeWidth={3.5} />
+                          <Check size={12} strokeWidth={3.5} />
                         </button>
                       </div>
 
@@ -743,7 +748,7 @@ export default function TrackerView({
         })}
       </div>
 
-      {/* ✅ CORTINA PROTECTORA DE DEGRADADO Y FOOTER FIJO PERFECTAMENTE ANCLADO */}
+      {/* Footer Fijo con cortina */}
       <div 
         className="fixed bottom-0 left-0 right-0 z-30 pt-8 pb-5 px-5 bg-gradient-to-t from-[#050507] via-[#050507]/95 to-transparent pointer-events-auto"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 12px)' }}
