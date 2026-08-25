@@ -1,7 +1,7 @@
 // src/lib/dataService.js
 import { supabase } from './supabaseClient';
 
-// Helper con Timeout para que NUNCA se congele en datos móviles
+// Helper con Timeout para que nunca se congele en datos móviles
 const fetchWithTimeout = async (promise, timeoutMs = 2500) => {
   return Promise.race([
     promise,
@@ -13,21 +13,18 @@ const fetchWithTimeout = async (promise, timeoutMs = 2500) => {
 
 // ==================== HELPER DE CACHÉ OFFLINE-FIRST ====================
 const cacheOrFetch = async (key, fetcher) => {
-  // 1. Si no hay conexión evidente, devolver caché de inmediato
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const cached = localStorage.getItem(key);
     return cached ? JSON.parse(cached) : null;
   }
 
   try {
-    // 2. Intentar red con límite de 2.5s (vital para datos móviles)
     const data = await fetchWithTimeout(fetcher(), 2500);
     if (data !== null && data !== undefined) {
       localStorage.setItem(key, JSON.stringify(data));
     }
     return data;
   } catch (error) {
-    // 3. Si la red móvil falla o tarda, usar la caché sin bloquear al usuario
     const cached = localStorage.getItem(key);
     if (cached) {
       try {
@@ -74,29 +71,77 @@ function formatRoutineData(r) {
 
 // ==================== PERFILES ====================
 export async function fetchProfiles() {
-  const result = await cacheOrFetch('profilesCache', async () => {
-    const { data, error } = await supabase.from('profiles').select('*');
-    if (error) throw error;
-    return data || [];
-  });
-  return result || [];
+  const localSaved = JSON.parse(localStorage.getItem('userProfiles') || localStorage.getItem('profilesCache') || '[]');
+
+  let remoteProfiles = [];
+  try {
+    const result = await cacheOrFetch('profilesCache', async () => {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) throw error;
+      return data || [];
+    });
+    remoteProfiles = result || [];
+  } catch (e) {
+    console.warn('Usando perfiles locales:', e);
+  }
+
+  // Fusión inteligente para nunca perder perfiles creados localmente
+  const mergedMap = new Map();
+  remoteProfiles.forEach(p => mergedMap.set(p.id, p));
+  localSaved.forEach(p => mergedMap.set(p.id, { ...mergedMap.get(p.id), ...p }));
+
+  const finalProfiles = Array.from(mergedMap.values());
+  if (finalProfiles.length > 0) {
+    localStorage.setItem('userProfiles', JSON.stringify(finalProfiles));
+    localStorage.setItem('profilesCache', JSON.stringify(finalProfiles));
+    return finalProfiles;
+  }
+
+  return localSaved.length > 0 ? localSaved : [];
 }
 
 export async function updateProfile(profile) {
+  if (!profile || !profile.id) return;
+
+  // 1. Guardar de inmediato en todas las memorias locales para persistencia garantizada
+  const currentProfiles = JSON.parse(localStorage.getItem('userProfiles') || localStorage.getItem('profilesCache') || '[]');
+  const exists = currentProfiles.some(p => p.id === profile.id);
+  const updatedList = exists
+    ? currentProfiles.map(p => p.id === profile.id ? { ...p, ...profile } : p)
+    : [...currentProfiles, profile];
+
+  localStorage.setItem('userProfiles', JSON.stringify(updatedList));
+  localStorage.setItem('profilesCache', JSON.stringify(updatedList));
+
+  // 2. Sincronizar en la nube si hay conexión
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(profile, { onConflict: 'id' });
-  if (error) throw error;
+
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(profile, { onConflict: 'id' });
+    if (error) console.warn('Aviso Supabase perfil:', error);
+  } catch (err) {
+    console.warn('Error de red al sincronizar perfil:', err);
+  }
 }
 
 export async function deleteProfile(profileId) {
+  const currentProfiles = JSON.parse(localStorage.getItem('userProfiles') || localStorage.getItem('profilesCache') || '[]');
+  const updatedList = currentProfiles.filter(p => p.id !== profileId);
+  localStorage.setItem('userProfiles', JSON.stringify(updatedList));
+  localStorage.setItem('profilesCache', JSON.stringify(updatedList));
+
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-  const { error } = await supabase
-    .from('profiles')
-    .delete()
-    .eq('id', profileId);
-  if (error) throw error;
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', profileId);
+    if (error) console.warn('Aviso Supabase delete:', error);
+  } catch (err) {
+    console.warn('Error de red al borrar perfil:', err);
+  }
 }
 
 // ==================== RUTINAS ====================

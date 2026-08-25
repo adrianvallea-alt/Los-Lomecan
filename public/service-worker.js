@@ -1,5 +1,5 @@
 // public/service-worker.js
-const CACHE_NAME = 'lomecan-v10'; // Incrementada versión para forzar actualización limpia
+const CACHE_NAME = 'lomecan-v12';
 
 const getBaseUrl = () => {
   return self.location.pathname.replace(/\/[^/]*$/, '/');
@@ -34,11 +34,11 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 1. SUPABASE y APIs Externas: NO interceptar con respuestas 503 falsas
-  // Dejar que el código de la app gestione el offline directamente con LocalStorage
+  // APIs Externas y Avatares: Dejar pasar directamente a la red
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('openfoodfacts.org') ||
+    url.hostname.includes('dicebear.com') ||
     url.hostname.includes('r2.dev') ||
     url.hostname.includes('youtube.com') ||
     request.url.startsWith('chrome-extension://')
@@ -46,7 +46,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Navegación (HTML): Network-first con fallback a index.html en caché
+  // Navegación (HTML)
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -60,7 +60,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Archivos estáticos de la app (JS, CSS, Imágenes locales): Cache-first
+  // Archivos estáticos locales
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;

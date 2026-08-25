@@ -7,11 +7,9 @@ import FoodCatalog from './components/FoodCatalog';
 import GymTracker from './components/GymTracker';
 import EvolutionView from './components/EvolutionView';
 import ProfileManager from './components/ProfileManager';
-import EditProfileModal from './components/EditProfileModal';
-import IntroScreen from './components/IntroScreen';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
-import { Edit3, Users, Lock, Radio } from 'lucide-react';
+import { Users, Lock, Radio } from 'lucide-react';
 import {
   fetchProfiles,
   fetchUserRoutines,
@@ -24,6 +22,7 @@ import {
 } from './lib/dataService';
 import useReminders from './hooks/useReminders';
 import useOfflineQueue from './hooks/useOfflineQueue';
+import useWeightLogs from './hooks/useWeightLogs';
 
 const DEFAULT_PROFILES = [
   { id: 'adrian', name: 'Adrián', role: 'Coach', color: 'lime', goals: { cal: 2800, pro: 180, carb: 300, fat: 75 }, pin: null, avatar: null },
@@ -43,32 +42,22 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('hoy');
   const [dailyIntake, setDailyIntake] = useState([]);
   const [routines, setRoutines] = useState([]);
-  const [editingName, setEditingName] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showProfileManager, setShowProfileManager] = useState(false);
-  const [showNewProfileModal, setShowNewProfileModal] = useState(false);
   const [openLibrary, setOpenLibrary] = useState(false);
-  const [introSkipped, setIntroSkipped] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
+  const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
   // Cargar perfiles
   useEffect(() => {
     const loadProfiles = async () => {
       try {
-        const supabaseProfiles = await fetchProfiles();
-        let merged = supabaseProfiles && supabaseProfiles.length > 0
-          ? supabaseProfiles.map(p => ({
-              ...p,
-              goals: p.goals || { cal: 2000, pro: 100, carb: 200, fat: 50 },
-              pin: p.pin || null,
-              avatar: p.avatar || null,
-            }))
-          : DEFAULT_PROFILES;
-        const cleaned = uniqueById(merged);
+        const list = await fetchProfiles();
+        const cleaned = uniqueById(list && list.length > 0 ? list : DEFAULT_PROFILES);
         setProfiles(cleaned);
 
         if (activeProfile) {
@@ -79,7 +68,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        const saved = localStorage.getItem('userProfiles');
+        const saved = localStorage.getItem('userProfiles') || localStorage.getItem('profilesCache');
         setProfiles(saved ? uniqueById(JSON.parse(saved)) : DEFAULT_PROFILES);
       } finally {
         setLoading(false);
@@ -98,7 +87,7 @@ export default function App() {
     localStorage.removeItem('lastActiveProfile');
   };
 
-  // Cargar rutinas del perfil activo
+  // Cargar rutinas
   useEffect(() => {
     if (!activeProfile) {
       setRoutines([]);
@@ -131,9 +120,9 @@ export default function App() {
     loadData();
   }, [activeProfile]);
 
-  // Onboarding
+  // Calibración inicial si faltan datos
   useEffect(() => {
-    if (activeProfile) {
+    if (activeProfile && activeProfile.id && !activeProfile.id.startsWith('temp_')) {
       const needsOnboarding = !activeProfile.weight || !activeProfile.height || !activeProfile.age;
       setShowOnboarding(needsOnboarding);
     }
@@ -165,7 +154,6 @@ export default function App() {
     }
   };
 
-  // Añadir alimento al día (CON PRESERVACIÓN DE CATEGORÍA / MEALTYPE)
   const addFoodToDay = async (food, grams) => {
     const newEntry = {
       id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -219,21 +207,52 @@ export default function App() {
   };
 
   const handleUpdateProfile = async (updatedProfile) => {
-    const updated = profiles.map(p => p.id === updatedProfile.id ? updatedProfile : p);
-    const cleaned = uniqueById(updated);
+    const validId = updatedProfile.id || updatedProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
+    const profileWithId = {
+      ...updatedProfile,
+      id: validId,
+      goals: updatedProfile.goals || { cal: 2000, pro: 120, carb: 200, fat: 55 }
+    };
+
+    const exists = profiles.some(p => p.id === profileWithId.id);
+    const updatedList = exists
+      ? profiles.map(p => p.id === profileWithId.id ? profileWithId : p)
+      : [...profiles, profileWithId];
+
+    const cleaned = uniqueById(updatedList);
     setProfiles(cleaned);
     localStorage.setItem('userProfiles', JSON.stringify(cleaned));
+    localStorage.setItem('profilesCache', JSON.stringify(cleaned));
 
     try {
-      await updateProfile(updatedProfile);
+      await updateProfile(profileWithId);
     } catch (e) {
-      addToQueue('updateProfile', updatedProfile);
+      addToQueue('updateProfile', profileWithId);
     }
 
-    if (activeProfile && activeProfile.id === updatedProfile.id) {
-      setActiveProfile(updatedProfile);
-      localStorage.setItem('lastActiveProfile', JSON.stringify(updatedProfile));
+    if (!activeProfile || activeProfile.id === profileWithId.id) {
+      setActiveProfile(profileWithId);
+      localStorage.setItem('lastActiveProfile', JSON.stringify(profileWithId));
     }
+  };
+
+  const handleAddNewProfile = () => {
+    const tempId = `temp_${Date.now()}`;
+    const newEmptyProfile = {
+      id: tempId,
+      name: '',
+      role: 'Athlete',
+      color: 'lime',
+      avatar: `https://api.dicebear.com/9.x/adventurer/svg?seed=${tempId}`,
+      weight: null,
+      height: null,
+      age: null,
+      gender: 'male',
+      goals: { cal: 2000, pro: 120, carb: 200, fat: 55 },
+      water_goal: 2000,
+    };
+    setActiveProfile(newEmptyProfile);
+    setShowOnboarding(true);
   };
 
   const currentRoutine = routines.find(r => r.is_active === true);
@@ -258,41 +277,50 @@ export default function App() {
           const cleaned = uniqueById(newProfiles);
           setProfiles(cleaned);
           localStorage.setItem('userProfiles', JSON.stringify(cleaned));
+          localStorage.setItem('profilesCache', JSON.stringify(cleaned));
         }}
         onClose={() => setShowProfileManager(false)}
       />
     );
   }
 
-  if (!activeProfile) {
+  if (!activeProfile && !showOnboarding) {
     return (
-      <>
-        <ProfileSelection
-          profiles={profiles}
-          onSelectProfile={handleSelectProfile}
-          onAddProfile={() => setShowNewProfileModal(true)}
-          onUpdateProfile={handleUpdateProfile}
-        />
-        {showNewProfileModal && (
-          <EditProfileModal
-            profile={{ name: '', color: 'lime', pin: '', avatar: '' }}
-            onSave={(profile) => {
-              handleSelectProfile(profile);
-              setShowNewProfileModal(false);
-            }}
-            onCancel={() => setShowNewProfileModal(false)}
-          />
-        )}
-      </>
+      <ProfileSelection
+        profiles={profiles}
+        onSelectProfile={handleSelectProfile}
+        onAddProfile={handleAddNewProfile}
+        onUpdateProfile={handleUpdateProfile}
+      />
     );
   }
 
   if (showOnboarding) {
     return (
       <OnboardingWizard
-        onComplete={(data) => {
-          const updatedProfile = { ...activeProfile, ...data };
-          handleUpdateProfile(updatedProfile);
+        initialName={activeProfile?.name || ''}
+        onCancel={() => {
+          const saved = localStorage.getItem('lastActiveProfile');
+          const lastProf = saved ? JSON.parse(saved) : null;
+          if (lastProf && profiles.some(p => p.id === lastProf.id)) {
+            setActiveProfile(lastProf);
+          } else {
+            setActiveProfile(null);
+          }
+          setShowOnboarding(false);
+        }}
+        onComplete={async (data) => {
+          const finalName = data.name?.trim() || activeProfile?.name?.trim() || `Atleta ${profiles.length + 1}`;
+          const newRealId = `user_${Date.now()}`;
+          const updatedProfile = {
+            ...activeProfile,
+            ...data,
+            name: finalName,
+            id: (activeProfile?.id && !activeProfile.id.startsWith('temp_')) ? activeProfile.id : newRealId,
+          };
+          await handleUpdateProfile(updatedProfile);
+          setActiveProfile(updatedProfile);
+          localStorage.setItem('lastActiveProfile', JSON.stringify(updatedProfile));
           setShowOnboarding(false);
         }}
       />
@@ -306,16 +334,18 @@ export default function App() {
           <Dashboard
             profile={activeProfile}
             dailyIntake={dailyIntake}
+            weightLogs={weightLogs}
             currentRoutine={currentRoutine}
             onStartWorkout={() => setCurrentTab('gimnasio')}
             onGoToRoutines={() => setCurrentTab('gimnasio')}
             onGoToEvolution={() => setCurrentTab('evolucion')}
             onAddFood={addFoodToDay}
             onDeleteFood={deleteFoodFromDay}
+            onUpdateProfile={handleUpdateProfile}
           />
         );
       case 'alimentos':
-        return <FoodCatalog onAddToDay={addFoodToDay} />;
+        return <FoodCatalog onAddToDay={addFoodToDay} goals={activeProfile?.goals} />;
       case 'gimnasio':
         return (
           <GymTracker
@@ -353,14 +383,14 @@ export default function App() {
                 {activeProfile.avatar?.startsWith('http') ? (
                   <img src={activeProfile.avatar} alt={activeProfile.name} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="font-black text-xs text-white">{activeProfile.avatar || activeProfile.name?.charAt(0)}</span>
+                  <span className="font-black text-xs text-white">{activeProfile.avatar || activeProfile.name?.charAt(0) || 'A'}</span>
                 )}
               </div>
             </div>
 
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile.name}</span>
+                <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile.name || 'Atleta'}</span>
               </div>
               <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#D4FF00]/80 uppercase block">
                 {activeProfile.role || 'ATLETA PRO'}

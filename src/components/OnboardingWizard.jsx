@@ -1,6 +1,6 @@
 // src/components/OnboardingWizard.jsx
 import React, { useState } from 'react';
-import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles, Droplets } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles, User, X } from 'lucide-react';
 
 // =========================================================================
 // FÓRMULAS CIENTÍFICAS DE GRADO CLÍNICO Y DEPORTIVO
@@ -86,14 +86,16 @@ const calculateWaterGoal = (weight, activityLevel) => {
 };
 
 const STEPS = [
-  { title: 'Sexo y edad', icon: Calendar },
-  { title: 'Peso y altura', icon: Ruler },
+  { title: 'Nombre y Perfil', icon: User },
+  { title: 'Sexo y Edad', icon: Calendar },
+  { title: 'Peso y Altura', icon: Ruler },
   { title: 'Actividad', icon: Activity },
   { title: 'Objetivo', icon: Target },
 ];
 
-export default function OnboardingWizard({ onComplete }) {
+export default function OnboardingWizard({ initialName = '', onComplete, onCancel }) {
   const [step, setStep] = useState(0);
+  const [name, setName] = useState(initialName || '');
   const [gender, setGender] = useState('male');
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
@@ -123,6 +125,7 @@ export default function OnboardingWizard({ onComplete }) {
     const waterGoal = calculateWaterGoal(w, activityLevel);
 
     onComplete({
+      name: name.trim() || 'Atleta',
       weight: w,
       height: h,
       age: a,
@@ -137,6 +140,7 @@ export default function OnboardingWizard({ onComplete }) {
 
   const handleSkip = () => {
     onComplete({
+      name: name.trim() || 'Atleta',
       weight: 70,
       height: 170,
       age: 28,
@@ -149,14 +153,40 @@ export default function OnboardingWizard({ onComplete }) {
     });
   };
 
+  // PASO 0: NOMBRE
   const renderStep0 = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
+          <User size={28} className="text-[#D4FF00]" />
+        </div>
+        <h3 className="text-lg font-bold text-white">¿Cómo te llamas?</h3>
+        <p className="text-xs text-zinc-400 mt-1">Nombre o apodo para tu credencial del Club</p>
+      </div>
+
+      <div>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold uppercase font-mono">Nombre Completo *</label>
+        <input
+          type="text"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ej: Carlos Pérez"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-4 text-sm font-bold text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all"
+        />
+      </div>
+    </div>
+  );
+
+  // PASO 1: SEXO Y EDAD
+  const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center">
         <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Calendar size={28} className="text-[#D4FF00]" />
         </div>
         <h3 className="text-lg font-bold text-white">Sexo biológico y edad</h3>
-        <p className="text-xs text-zinc-500 mt-1">Cálculo de Tasa Metabólica Basal (Mifflin-St Jeor)</p>
+        <p className="text-xs text-zinc-400 mt-1">Cálculo de Tasa Metabólica Basal (Mifflin-St Jeor)</p>
       </div>
 
       <div className="flex gap-3">
@@ -169,7 +199,7 @@ export default function OnboardingWizard({ onComplete }) {
               : 'border-white/[0.08] text-zinc-500 hover:border-[#D4FF00]/30'
           }`}
         >
-          🙋‍♂️ <span className="text-sm ml-1">Hombre</span>
+          🙋‍♂️ <span className="text-sm ml-1 font-bold">Hombre</span>
         </button>
         <button
           type="button"
@@ -180,36 +210,37 @@ export default function OnboardingWizard({ onComplete }) {
               : 'border-white/[0.08] text-zinc-500 hover:border-[#D4FF00]/30'
           }`}
         >
-          🙋‍♀️ <span className="text-sm ml-1">Mujer</span>
+          🙋‍♀️ <span className="text-sm ml-1 font-bold">Mujer</span>
         </button>
       </div>
 
       <div>
-        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold">Edad (años)</label>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold uppercase font-mono">Edad (años) *</label>
         <input
           type="number"
           inputMode="numeric"
           value={age}
           onChange={(e) => setAge(e.target.value)}
           placeholder="Ej: 25"
-          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-4 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all font-mono font-bold"
         />
       </div>
     </div>
   );
 
-  const renderStep1 = () => (
+  // PASO 2: ANTROPOMETRÍA
+  const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center">
         <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Ruler size={28} className="text-[#D4FF00]" />
         </div>
         <h3 className="text-lg font-bold text-white">Antropometría</h3>
-        <p className="text-xs text-zinc-500 mt-1">Determinación precisa de agua y proteínas por kg</p>
+        <p className="text-xs text-zinc-400 mt-1">Determinación precisa de agua y proteínas por kg</p>
       </div>
 
       <div>
-        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold">Peso corporal actual (kg)</label>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold uppercase font-mono">Peso corporal actual (kg) *</label>
         <input
           type="number"
           step="0.1"
@@ -217,11 +248,11 @@ export default function OnboardingWizard({ onComplete }) {
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
           placeholder="Ej: 75.5"
-          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-4 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all font-mono font-bold"
         />
       </div>
       <div>
-        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold">Estatura (cm)</label>
+        <label className="text-[11px] text-zinc-400 ml-1 mb-1.5 block font-semibold uppercase font-mono">Estatura (cm) *</label>
         <input
           type="number"
           step="0.5"
@@ -229,20 +260,21 @@ export default function OnboardingWizard({ onComplete }) {
           value={height}
           onChange={(e) => setHeight(e.target.value)}
           placeholder="Ej: 175"
-          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-3.5 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all"
+          className="w-full bg-[#09090B] border border-white/[0.08] rounded-2xl p-4 text-sm text-white placeholder-zinc-600 focus:border-[#D4FF00]/50 outline-none transition-all font-mono font-bold"
         />
       </div>
     </div>
   );
 
-  const renderStep2 = () => (
+  // PASO 3: ACTIVIDAD
+  const renderStep3 = () => (
     <div className="space-y-6">
       <div className="text-center">
         <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Activity size={28} className="text-[#D4FF00]" />
         </div>
         <h3 className="text-lg font-bold text-white">Nivel de actividad (PAL)</h3>
-        <p className="text-xs text-zinc-500 mt-1">Factor multiplicador de gasto calórico diario</p>
+        <p className="text-xs text-zinc-400 mt-1">Factor multiplicador de gasto calórico diario</p>
       </div>
 
       <div className="space-y-2">
@@ -271,14 +303,15 @@ export default function OnboardingWizard({ onComplete }) {
     </div>
   );
 
-  const renderStep3 = () => (
+  // PASO 4: OBJETIVO
+  const renderStep4 = () => (
     <div className="space-y-6">
       <div className="text-center">
         <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto mb-3 shadow-[0_0_20px_rgba(212,255,0,0.2)]">
           <Target size={28} className="text-[#D4FF00]" />
         </div>
         <h3 className="text-lg font-bold text-white">Objetivo metabólico</h3>
-        <p className="text-xs text-zinc-500 mt-1">Ajuste de balance energético y ratio de proteína</p>
+        <p className="text-xs text-zinc-400 mt-1">Ajuste de balance energético y ratio de proteína</p>
       </div>
 
       <div className="space-y-2.5">
@@ -314,24 +347,39 @@ export default function OnboardingWizard({ onComplete }) {
       case 1: return renderStep1();
       case 2: return renderStep2();
       case 3: return renderStep3();
+      case 4: return renderStep4();
       default: return null;
     }
   };
 
   return (
     <div className="min-h-screen bg-[#09090B] flex flex-col justify-center px-5 safe-top safe-bottom relative overflow-hidden select-none">
+      
+      {/* Botón de Cancelar / Cerrar Superior */}
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute top-6 right-6 z-30 p-2.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white active:scale-95 transition-all shadow-md"
+          title="Cancelar creación"
+          aria-label="Cerrar modal"
+        >
+          <X size={18} />
+        </button>
+      )}
+
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-[#D4FF00]/[0.03] rounded-full blur-[120px]" />
       </div>
 
       <div className="w-full max-w-md mx-auto text-center relative z-10">
-        <div className="mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 shadow-[0_0_25px_rgba(212,255,0,0.2)] mb-3 text-[#D4FF00]">
-            <Sparkles size={28} />
+        <div className="mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-3xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 shadow-[0_0_25px_rgba(212,255,0,0.2)] mb-2.5 text-[#D4FF00]">
+            <Sparkles size={24} />
           </div>
-          <h1 className="text-xl font-black text-white tracking-tight">Calibración Biométrica</h1>
-          <p className="text-xs text-zinc-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
-            Algoritmos validados por la ISSN y Mifflin-St Jeor
+          <h1 className="text-xl font-black text-white tracking-tight font-sans">Calibración de Atleta</h1>
+          <p className="text-xs text-zinc-400 mt-1 max-w-[280px] mx-auto leading-relaxed font-mono">
+            Paso {step + 1} de {totalSteps}: {STEPS[step]?.title}
           </p>
         </div>
 
@@ -362,7 +410,7 @@ export default function OnboardingWizard({ onComplete }) {
             <button
               type="button"
               onClick={prevStep}
-              className="flex-1 py-3.5 border border-white/[0.1] rounded-2xl text-zinc-400 text-xs font-bold flex items-center justify-center gap-1 hover:bg-white/[0.05] hover:text-white transition-all"
+              className="flex-1 py-3.5 border border-white/[0.1] rounded-2xl text-zinc-400 text-xs font-bold flex items-center justify-center gap-1 hover:bg-white/[0.05] hover:text-white transition-all font-mono uppercase"
             >
               <ChevronLeft size={16} /> Atrás
             </button>
@@ -371,14 +419,15 @@ export default function OnboardingWizard({ onComplete }) {
             type="button"
             onClick={nextStep}
             disabled={
-              (step === 0 && !age) ||
-              (step === 1 && (!weight || !height))
+              (step === 0 && !name.trim()) ||
+              (step === 1 && !age) ||
+              (step === 2 && (!weight || !height))
             }
-            className="flex-1 py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-30 transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)]"
+            className="flex-1 py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-30 transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] font-mono"
           >
             {step === totalSteps - 1 ? (
               <>
-                <Check size={16} strokeWidth={3} /> Guardar Perfil
+                <Check size={16} strokeWidth={3} /> Completar y Entrar
               </>
             ) : (
               <>
@@ -388,13 +437,16 @@ export default function OnboardingWizard({ onComplete }) {
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSkip}
-          className="mt-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-white transition-colors"
-        >
-          Omitir y calibrar después
-        </button>
+        {/* Botón de Cancelar Inferior */}
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-rose-400 transition-colors block mx-auto"
+          >
+            ✕ Cancelar y volver
+          </button>
+        )}
       </div>
     </div>
   );

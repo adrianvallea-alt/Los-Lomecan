@@ -7,7 +7,6 @@ import {
   Flame, Activity, X, Camera
 } from 'lucide-react';
 import useWeightLogs from '../hooks/useWeightLogs';
-import useBodyMeasures from '../hooks/useBodyMeasures';
 import ProgressPhotos from './ProgressPhotos';
 
 export const calculate1RM = (weight, reps) => {
@@ -24,6 +23,76 @@ const triggerHaptic = (ms = 20) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try { navigator.vibrate(ms); } catch (e) {}
   }
+};
+
+// Función de detección robusta con diccionario extendido
+const detectMuscleGroup = (muscleRaw = '', exerciseName = '') => {
+  const normalize = (str) =>
+    (str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const m = normalize(muscleRaw);
+  const n = normalize(exerciseName);
+  const combined = `${m} ${n}`;
+
+  if (
+    combined.includes('pecho') || combined.includes('pectoral') || combined.includes('chest') ||
+    combined.includes('banca') || combined.includes('apertura') || combined.includes('fondo') ||
+    combined.includes('cruce') || combined.includes('inclinado') || combined.includes('declinado') ||
+    combined.includes('peck deck') || combined.includes('pec deck')
+  ) {
+    return 'Pecho';
+  }
+  
+  if (
+    combined.includes('espalda') || combined.includes('dorsal') || combined.includes('trapecio') ||
+    combined.includes('lumb') || combined.includes('remo') || combined.includes('jalon') ||
+    combined.includes('dominada') || combined.includes('pulldown') || combined.includes('back') ||
+    combined.includes('pull over') || combined.includes('pullover') || combined.includes('peso muerto')
+  ) {
+    return 'Espalda';
+  }
+
+  if (
+    combined.includes('pierna') || combined.includes('cuadricep') || combined.includes('femoral') ||
+    combined.includes('gluteo') || combined.includes('isquio') || combined.includes('gemelo') ||
+    combined.includes('pantorrilla') || combined.includes('sentadilla') || combined.includes('prensa') ||
+    combined.includes('zancada') || combined.includes('leg extension') || combined.includes('curl femoral') ||
+    combined.includes('hip thrust') || combined.includes('bulgara') || combined.includes('aduc') ||
+    combined.includes('abduc') || combined.includes('squat') || combined.includes('hack')
+  ) {
+    return 'Pierna';
+  }
+
+  if (
+    combined.includes('hombro') || combined.includes('deltoid') || combined.includes('militar') ||
+    combined.includes('lateral') || combined.includes('pajaro') || combined.includes('shoulder') ||
+    combined.includes('press arnold') || combined.includes('face pull') || combined.includes('facepull') ||
+    combined.includes('frontal') || combined.includes('posterior')
+  ) {
+    return 'Hombro';
+  }
+
+  if (
+    combined.includes('bicep') || combined.includes('tricep') || combined.includes('brazo') ||
+    combined.includes('antebrazo') || combined.includes('curl') || combined.includes('frances') ||
+    combined.includes('copa') || combined.includes('extension polea') || combined.includes('martillo') ||
+    combined.includes('predicador') || combined.includes('pushdown') || combined.includes('fondos paralelas')
+  ) {
+    return 'Brazo';
+  }
+
+  if (
+    combined.includes('abdom') || combined.includes('core') || combined.includes('crunch') ||
+    combined.includes('plancha') || combined.includes('elevacion de piernas') || combined.includes('abs') ||
+    combined.includes('oblicuo') || combined.includes('rueda')
+  ) {
+    return 'Abdomen';
+  }
+
+  return null;
 };
 
 // Gráfica táctil con scroll vertical libre
@@ -144,18 +213,24 @@ const InteractiveLineChart = ({ data, color, unit = '', height = 135 }) => {
 };
 
 export default function EvolutionView({ activeProfile }) {
-  const [activeTab, setActiveTab] = useState('metrics'); // 'metrics' | 'photos'
+  const [activeTab, setActiveTab] = useState('metrics');
   const [weightInput, setWeightInput] = useState('');
 
   const [calcWeight, setCalcWeight] = useState('');
   const [calcReps, setCalcReps] = useState('');
   const [showInteractiveCalc, setShowInteractiveCalc] = useState(false);
 
-  const { logs: weightLogs, addLog } = useWeightLogs(activeProfile.id);
+  const { logs: weightLogs, addLog } = useWeightLogs(activeProfile?.id);
 
   const [topExercises, setTopExercises] = useState([]);
-  const [muscleDistribution, setMuscleDistribution] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [muscleDistribution, setMuscleDistribution] = useState({
+    Pecho: 0,
+    Espalda: 0,
+    Pierna: 0,
+    Hombro: 0,
+    Brazo: 0,
+    Abdomen: 0
+  });
 
   const weightData = useMemo(() => {
     return (weightLogs || [])
@@ -168,6 +243,8 @@ export default function EvolutionView({ activeProfile }) {
   }, [weightLogs]);
 
   useEffect(() => {
+    if (!activeProfile?.id) return;
+
     const loadData = () => {
       const allSessions = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -180,25 +257,22 @@ export default function EvolutionView({ activeProfile }) {
         }
       }
 
-      if (allSessions.length === 0) {
-        setLoading(false);
-        return;
-      }
+      if (allSessions.length === 0) return;
 
       const exerciseRecords = {};
       const muscleSets = { Pecho: 0, Espalda: 0, Pierna: 0, Hombro: 0, Brazo: 0, Abdomen: 0 };
-      const sevenDaysAgo = Date.now() - 7 * 86400000;
+      const sevenDaysAgo = Date.now() - (7 * 86400000);
 
       allSessions.forEach(session => {
         const isRecent = new Date(session.date).getTime() >= sevenDaysAgo;
 
         (session.exercises || []).forEach(ex => {
-          const exKey = ex.libraryExerciseId || ex.id;
-          const muscleName = (ex.muscle || '').toLowerCase();
+          const exKey = ex.libraryExerciseId || ex.id || ex.name;
 
           (ex.sets || []).forEach(set => {
             const w = parseFloat(set.weight) || 0;
             const r = parseInt(set.reps) || 0;
+
             if (w > 0 && r > 0) {
               const estimated1RM = calculate1RM(w, r);
               if (!exerciseRecords[exKey] || estimated1RM > exerciseRecords[exKey].oneRepMax) {
@@ -207,12 +281,10 @@ export default function EvolutionView({ activeProfile }) {
             }
 
             if (isRecent && set.done) {
-              if (muscleName.includes('pecho')) muscleSets.Pecho += 1;
-              else if (muscleName.includes('espalda')) muscleSets.Espalda += 1;
-              else if (muscleName.includes('pierna') || muscleName.includes('cuádriceps') || muscleName.includes('femoral') || muscleName.includes('glúteo')) muscleSets.Pierna += 1;
-              else if (muscleName.includes('hombro')) muscleSets.Hombro += 1;
-              else if (muscleName.includes('bíceps') || muscleName.includes('tríceps') || muscleName.includes('brazo')) muscleSets.Brazo += 1;
-              else muscleSets.Abdomen += 1;
+              const detectedMuscle = detectMuscleGroup(ex.muscle, ex.name);
+              if (detectedMuscle && muscleSets[detectedMuscle] !== undefined) {
+                muscleSets[detectedMuscle] += 1;
+              }
             }
           });
         });
@@ -221,11 +293,14 @@ export default function EvolutionView({ activeProfile }) {
       setMuscleDistribution(muscleSets);
       const top = Object.values(exerciseRecords).sort((a, b) => b.oneRepMax - a.oneRepMax).slice(0, 8);
       setTopExercises(top);
-      setLoading(false);
     };
 
     loadData();
-  }, [activeProfile.id]);
+
+    // Actualización en tiempo real al finalizar un entrenamiento
+    window.addEventListener('workoutFinished', loadData);
+    return () => window.removeEventListener('workoutFinished', loadData);
+  }, [activeProfile?.id]);
 
   const handleAddWeight = () => {
     const weight = parseFloat(weightInput);
@@ -255,7 +330,7 @@ export default function EvolutionView({ activeProfile }) {
   return (
     <div className="flex-1 flex flex-col animate-fade-in bg-[#09090B] pb-40 no-scrollbar select-none">
       
-      {/* Header con Pestañas Fijas de Métricas vs Fotos */}
+      {/* Header */}
       <div className="px-5 pt-3 pb-2 shrink-0 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -272,7 +347,7 @@ export default function EvolutionView({ activeProfile }) {
           </button>
         </div>
 
-        {/* Pestañas fijas de navegación */}
+        {/* Pestañas fijas */}
         <div className="flex bg-white/[0.04] p-1 rounded-2xl border border-white/[0.06]">
           <button
             onClick={() => {
@@ -310,7 +385,7 @@ export default function EvolutionView({ activeProfile }) {
           <ProgressPhotos activeProfile={activeProfile} onBack={() => setActiveTab('metrics')} />
         </div>
       ) : (
-        /* PESTAÑA: MÉTRICAS Y TELEMETRÍA */
+        /* PESTAÑA: MÉTRICAS */
         <div className="flex-1 flex flex-col min-h-0 space-y-4">
           
           {/* Gráfica de Peso Corporal */}
@@ -345,40 +420,51 @@ export default function EvolutionView({ activeProfile }) {
               <button
                 onClick={handleAddWeight}
                 disabled={!weightInput}
-                className="px-4 py-2 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 disabled:opacity-30 transition-all shrink-0"
+                className="px-4 py-2 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 disabled:opacity-30 transition-all shrink-0 font-mono"
               >
                 Guardar
               </button>
             </div>
           </div>
 
-          {/* Mapa de Volumen Muscular */}
+          {/* MATRIZ: ZONAS DE VOLUMEN CIENTÍFICAS */}
           <div className="px-5 shrink-0">
             <div className="luxury-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Activity size={16} className="text-[#D4FF00]" />
                   <h3 className="text-[10px] font-mono font-black uppercase tracking-wider text-white">
-                    Series Efectivas esta Semana
+                    Zonas de Hipertrofia (7 días)
                   </h3>
                 </div>
-                <span className="text-[10px] font-mono text-[#D4FF00] font-bold">Últimos 7 días</span>
+                <span className="text-[9px] font-mono text-[#D4FF00] font-bold">Criterio RP</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+              <div className="space-y-2.5 text-xs font-mono">
                 {Object.entries(muscleDistribution).map(([muscle, count]) => {
-                  const isOptimal = count >= 10;
-                  const isLow = count > 0 && count < 6;
+                  let status = { label: 'SUB-MEV', color: 'text-zinc-500', barColor: 'bg-zinc-700', percent: Math.min((count / 20) * 100, 100) };
+                  if (count >= 10 && count <= 18) {
+                    status = { label: 'MAV (ÓPTIMO)', color: 'text-[#D4FF00]', barColor: 'bg-[#D4FF00]', percent: (count / 20) * 100 };
+                  } else if (count > 18) {
+                    status = { label: 'MRV (FATIGA)', color: 'text-rose-400', barColor: 'bg-rose-500', percent: 100 };
+                  } else if (count >= 6) {
+                    status = { label: 'MEV (MANTENIMIENTO)', color: 'text-sky-400', barColor: 'bg-sky-400', percent: (count / 20) * 100 };
+                  }
 
                   return (
-                    <div key={muscle} className="bg-black/60 border border-white/[0.05] p-2 rounded-xl">
-                      <span className="text-[10px] text-zinc-400 uppercase block">{muscle}</span>
-                      <span className="text-sm font-black text-white">{count} <span className="text-[9px] text-zinc-500">series</span></span>
-                      <span className={`text-[8px] font-bold uppercase block mt-0.5 ${
-                        isOptimal ? 'text-[#D4FF00]' : isLow ? 'text-amber-400' : 'text-zinc-600'
-                      }`}>
-                        {isOptimal ? 'ÓPTIMO' : isLow ? 'BAJO' : count === 0 ? 'SIN SERIES' : 'MEDIO'}
-                      </span>
+                    <div key={muscle} className="bg-black/60 border border-white/[0.04] p-2.5 rounded-xl space-y-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="font-bold text-white uppercase">{muscle}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-black">{count} <span className="text-zinc-500 text-[9px]">series</span></span>
+                          <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-white/[0.08] ${status.color}`}>
+                            {status.label}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-black/80 rounded-full h-1.5 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-500 ${status.barColor}`} style={{ width: `${Math.max(status.percent, 3)}%` }} />
+                      </div>
                     </div>
                   );
                 })}
@@ -505,7 +591,7 @@ export default function EvolutionView({ activeProfile }) {
 
             <button
               onClick={() => setShowInteractiveCalc(false)}
-              className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95"
+              className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 font-mono"
             >
               Listo
             </button>

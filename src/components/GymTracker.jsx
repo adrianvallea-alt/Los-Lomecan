@@ -217,6 +217,8 @@ export default function GymTracker({
 
       return {
         ...ex,
+        muscle: ex.muscle || '',
+        secondaryMuscles: ex.secondaryMuscles || ex.secondary_muscles || '',
         sets: ex.sets.map(s => {
           const suggestion = getProgressionSuggestion(lastSets, s.reps, s.weight || '');
           return {
@@ -366,7 +368,7 @@ export default function GymTracker({
           <RoutineCreator
             initialData={editingRoutine}
             onSave={async (routineData) => {
-              const isGlobal = editingRoutine?.is_global ?? true;
+              const isGlobal = editingRoutine?.is_global ?? (isAdmin ? true : false);
               const routineId = crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`;
               const routineToSave = {
                 ...routineData,
@@ -425,7 +427,7 @@ export default function GymTracker({
                 addToQueue('saveWorkoutSession', session); 
               }
 
-              // ✅ EVENTO GLOBAL: Actualiza rachas, volumen y logros en vivo
+              // Evento global para refrescar logros, rachas y EvolutionView en vivo
               window.dispatchEvent(new CustomEvent('workoutFinished'));
 
               await loadAllHistory();

@@ -1,30 +1,42 @@
 // src/components/EditProfileModal.jsx
 import React, { useState, useRef } from 'react';
 import {
-  X, Save, Camera, Check, Shield, User, Calculator, Weight, Ruler, Calendar,
-  Activity, Target, Heart, Plus, Droplets, Bell, Utensils, Dumbbell,
-  Wand2, RefreshCw
+  X, Camera, User, Weight, Heart, Bell, RefreshCw, Sparkles, Smile, Loader2, Check,
+  Calendar, Ruler, Activity, Target, Flame
 } from 'lucide-react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
 import { COLORS } from '../utils/colors';
 import useReminders from '../hooks/useReminders';
 
-const EMOJIS = ['😎', '🏋️', '💪', '🔥', '🧘', '🤸', '⚡', '👑', '🐺', '🦍'];
-const ROLES = ['Atleta', 'Principiante', 'Intermedio', 'Avanzado', 'Entrenador'];
+const EMOJIS = ['😎', '🏋️', '💪', '🔥', '🧘', '🤸', '⚡', '👑', '🐺', '🦍', '🏊', '🚴', '🎯', '🥊', '🥋'];
 
+const DICEBEAR_STYLES = [
+  { id: 'adventurer', label: 'Aventurero' },
+  { id: 'avataaars', label: 'Cómic' },
+  { id: 'personas', label: 'Personas' },
+  { id: 'lorelei', label: 'Rostros Pro' },
+  { id: 'bottts', label: 'Robots' },
+  { id: 'notionists', label: 'Notion' },
+  { id: 'fun-emoji', label: 'Emoji 3D' },
+  { id: 'big-smile', label: 'Sonrisas' },
+];
+
+const ROLES = ['Coach', 'Athlete', 'Atleta Pro', 'Fitness Partner', 'Principiante'];
+
+// 100% Alineados con OnboardingWizard
 const ACTIVITY_LEVELS = [
-  { value: 'sedentary', label: 'Sedentario (poco o nada de ejercicio)' },
-  { value: 'light', label: 'Ligero (ejercicio 1-3 días/semana)' },
-  { value: 'moderate', label: 'Moderado (ejercicio 3-5 días/semana)' },
-  { value: 'active', label: 'Activo (ejercicio 6-7 días/semana)' },
-  { value: 'very_active', label: 'Muy activo (atleta, trabajo físico)' },
+  { value: 'sedentary', label: 'Sedentario', sub: 'Poco o nada de ejercicio (trabajo de escritorio)' },
+  { value: 'light', label: 'Ligero', sub: 'Ejercicio 1 a 3 días por semana' },
+  { value: 'moderate', label: 'Moderado', sub: 'Gimnasio 3 a 5 días por semana' },
+  { value: 'active', label: 'Activo', sub: 'Entrenamiento intenso 6 a 7 días por semana' },
+  { value: 'very_active', label: 'Muy activo / Pro', sub: 'Doble sesión o trabajo físico extenuante' },
 ];
 
 const GOAL_TYPES = [
-  { value: 'lose', label: 'Perder grasa (Déficit 20%)' },
-  { value: 'maintain', label: 'Mantener peso (Normocalórica)' },
-  { value: 'gain', label: 'Ganar músculo (Superávit 10%)' },
+  { value: 'lose', label: 'Perder Grasa (Definición)', icon: '🔥', desc: 'Déficit moderado 20% + 2.2g proteína/kg' },
+  { value: 'maintain', label: 'Mantenimiento / Recomposición', icon: '⚖️', desc: 'Normocalórica + 1.8g proteína/kg' },
+  { value: 'gain', label: 'Ganar Músculo (Volumen Limpio)', icon: '💪', desc: 'Superávit 10% + 2.0g proteína/kg' },
 ];
 
 const HEALTH_CONDITIONS = [
@@ -34,20 +46,6 @@ const HEALTH_CONDITIONS = [
   { value: 'type2_diabetes', label: 'Diabetes tipo 2' },
 ];
 
-const AVAILABLE_SUPPLEMENTS = [
-  { name: 'Creatina monohidrato', waterPerGram: 100 },
-  { name: 'Cafeína / Pre-entreno', waterPerGram: 50 },
-  { name: 'Proteína en polvo', waterPerGram: 0 },
-  { name: 'Multivitamínico', waterPerGram: 0 },
-  { name: 'Omega 3', waterPerGram: 0 },
-  { name: 'Glutamina', waterPerGram: 0 },
-];
-
-// =========================================================================
-// ALGORITMOS NUTRICIONALES BASADOS EN EVIDENCIA
-// =========================================================================
-
-// 1. TMB - Mifflin-St Jeor (1990)
 const calculateBMR = (weight, height, age, gender) => {
   if (!weight || !height || !age) return 0;
   const w = parseFloat(weight);
@@ -58,20 +56,15 @@ const calculateBMR = (weight, height, age, gender) => {
     : Math.round((10 * w) + (6.25 * h) - (5 * a) + 5);
 };
 
-// 2. Factores PAL (FAO/OMS)
 const getActivityFactor = (level) => {
   const factors = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
   return factors[level] || 1.55;
 };
 
-// 3. TDEE
 const calculateTDEE = (bmr, activityLevel) => Math.round(bmr * getActivityFactor(activityLevel));
 
-// 4. Objetivos con Ajuste Clínico (ISSN / Layman et al. 2008)
-const calculateMacroGoalsWithConditions = (tdee, weight, goalType, conditions = []) => {
+const calculateMacroGoals = (tdee, weight, goalType, conditions = []) => {
   const w = parseFloat(weight) || 70;
-
-  // Ajuste Calórico
   let targetCalories = tdee;
   if (goalType === 'lose') {
     const deficit = Math.min(Math.max(tdee * 0.20, 300), 750);
@@ -81,25 +74,16 @@ const calculateMacroGoalsWithConditions = (tdee, weight, goalType, conditions = 
     targetCalories = tdee + surplus;
   }
 
-  // Proteína (Morton et al. 2018; Helms et al. 2014)
-  let proteinPerKg = 1.8;
-  if (goalType === 'lose') proteinPerKg = 2.2;
-  else if (goalType === 'gain') proteinPerKg = 2.0;
-
-  // Condiciones clínicas que requieren mayor proteína y control insulínico
+  let proteinPerKg = goalType === 'lose' ? 2.2 : goalType === 'gain' ? 2.0 : 1.8;
   if (conditions.includes('pcos') || conditions.includes('insulin_resistance') || conditions.includes('type2_diabetes')) {
     proteinPerKg = Math.max(proteinPerKg, 2.2);
   }
 
   const protein = Math.round(proteinPerKg * w);
-
-  // Grasas esenciales
   let fatPerKg = goalType === 'lose' ? 0.6 : 0.8;
   if (conditions.includes('hypertension')) fatPerKg = 0.7;
 
   const fat = Math.round(Math.max(fatPerKg * w, 0.5 * w));
-
-  // Carbohidratos restantes
   const proteinCalories = protein * 4;
   const fatCalories = fat * 9;
   const carbCalories = Math.max(targetCalories - proteinCalories - fatCalories, 0);
@@ -113,7 +97,6 @@ const calculateMacroGoalsWithConditions = (tdee, weight, goalType, conditions = 
   };
 };
 
-// 5. Hidratación
 const calculateWaterGoal = (weight, activityLevel = 'moderate') => {
   const w = parseFloat(weight) || 70;
   let base = w * 35;
@@ -122,7 +105,7 @@ const calculateWaterGoal = (weight, activityLevel = 'moderate') => {
   return Math.round(base);
 };
 
-const compressImage = (file, maxWidth = 200, maxHeight = 200, quality = 0.8) => {
+const compressImage = (file, maxWidth = 300, maxHeight = 300, quality = 0.85) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -138,13 +121,8 @@ const compressImage = (file, maxWidth = 200, maxHeight = 200, quality = 0.8) => 
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx.beginPath();
-        ctx.arc(width / 2, height / 2, Math.min(width, height) / 2, 0, Math.PI * 2);
-        ctx.clip();
         ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => {
-          resolve(blob);
-        }, 'image/webp', quality);
+        canvas.toBlob((blob) => resolve(blob), 'image/webp', quality);
       };
       img.src = e.target.result;
     };
@@ -153,13 +131,14 @@ const compressImage = (file, maxWidth = 200, maxHeight = 200, quality = 0.8) => 
 };
 
 const getColorKey = (c) => c.id || c.name;
-const getDefaultColor = () => COLORS[0] ? getColorKey(COLORS[0]) : '';
+const getDefaultColor = () => COLORS[0] ? getColorKey(COLORS[0]) : 'lime';
 
 export default function EditProfileModal({ profile, onSave, onCancel }) {
   const [tab, setTab] = useState('profile');
   const [name, setName] = useState(profile?.name || '');
   const [pin, setPin] = useState(profile?.pin || '');
-  const [role, setRole] = useState(profile?.role || '');
+  const [role, setRole] = useState(profile?.role || 'Athlete');
+  const [imageLoading, setImageLoading] = useState(false);
 
   const [color, setColor] = useState(() => {
     if (profile?.color) {
@@ -169,12 +148,37 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
     return getDefaultColor();
   });
 
-  const [avatar, setAvatar] = useState(profile?.avatar || '😎');
-  const [useImage, setUseImage] = useState(!!profile?.avatar?.startsWith('http'));
+  const [avatarMode, setAvatarMode] = useState(() => {
+    if (profile?.avatar?.includes('dicebear.com')) return 'dicebear';
+    if (profile?.avatar?.startsWith('http') || profile?.avatar?.startsWith('data:')) return 'photo';
+    if (profile?.avatar && EMOJIS.includes(profile.avatar)) return 'emoji';
+    return 'dicebear';
+  });
+
+  const [dicebearStyle, setDicebearStyle] = useState('adventurer');
+  const [dicebearSeed, setDicebearSeed] = useState(profile?.name || 'Adrian');
+
+  const buildSeedUrl = (style, seed) => {
+    const cleanSeed = encodeURIComponent(seed.trim() || 'Adrian');
+    return `https://api.dicebear.com/9.x/${style}/svg?seed=${cleanSeed}`;
+  };
+
+  const [avatar, setAvatar] = useState(() => {
+    if (profile?.avatar && profile.avatar.startsWith('http')) {
+      return profile.avatar;
+    }
+    return buildSeedUrl(dicebearStyle, dicebearSeed);
+  });
+
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(profile?.avatar?.startsWith('http') ? profile.avatar : null);
+  const [imagePreview, setImagePreview] = useState(() => {
+    if (profile?.avatar && profile.avatar.startsWith('http')) {
+      return profile.avatar;
+    }
+    return buildSeedUrl(dicebearStyle, dicebearSeed);
+  });
+
   const [saving, setSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const [weight, setWeight] = useState(profile?.weight?.toString() || '');
   const [height, setHeight] = useState(profile?.height?.toString() || '');
@@ -182,50 +186,46 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
   const [gender, setGender] = useState(profile?.gender || 'male');
   const [activityLevel, setActivityLevel] = useState(profile?.activity_level || 'moderate');
   const [goalType, setGoalType] = useState(profile?.goal_type || 'maintain');
-  const [goalWeight, setGoalWeight] = useState(profile?.goal_weight?.toString() || '');
-  const [autoCalculate, setAutoCalculate] = useState(profile?.auto_calculate_macros ?? true);
 
   const [healthConditions, setHealthConditions] = useState(profile?.health_conditions || []);
-  const [supplements, setSupplements] = useState(profile?.supplements || []);
-
-  const [dicebearStyle, setDicebearStyle] = useState('adventurer');
-  const [dicebearSeed, setDicebearSeed] = useState(profile?.name || '');
-
   const { reminders, updateReminders } = useReminders(profile?.id);
   const fileRef = useRef();
 
-  const toggleCondition = (value) => {
-    setHealthConditions(prev =>
-      prev.includes(value) ? prev.filter(c !== value) : [...prev, value]
-    );
+  const handleStyleChange = (newStyle) => {
+    setDicebearStyle(newStyle);
+    setImageLoading(true);
+    const newUrl = buildSeedUrl(newStyle, dicebearSeed);
+    setAvatar(newUrl);
+    setImagePreview(newUrl);
+  };
+
+  const handleSeedChange = (newSeed) => {
+    setDicebearSeed(newSeed);
+    setImageLoading(true);
+    const newUrl = buildSeedUrl(dicebearStyle, newSeed);
+    setAvatar(newUrl);
+    setImagePreview(newUrl);
+  };
+
+  const handleRandomSeed = () => {
+    const randomWords = ['Titan', 'Viper', 'Shadow', 'Apex', 'Volt', 'Storm', 'Cyber', 'Neon', 'Ares', 'Thor', 'Nova', 'Max'];
+    const randomWord = randomWords[Math.floor(Math.random() * randomWords.length)] + '_' + Math.floor(Math.random() * 999);
+    handleSeedChange(randomWord);
   };
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Máximo 5MB');
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('Máximo 8MB');
       return;
     }
     setImageFile(file);
     const compressed = await compressImage(file);
-    setImagePreview(URL.createObjectURL(compressed));
-    setUseImage(true);
-  };
-
-  const removeImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    setUseImage(false);
-    setAvatar('😎');
-  };
-
-  const generateAvatar = () => {
-    if (!dicebearSeed) return;
-    const url = `https://api.dicebear.com/7.x/${dicebearStyle}/png?seed=${encodeURIComponent(dicebearSeed)}&size=200`;
-    setAvatar(url);
-    setUseImage(true);
-    setImagePreview(url);
+    const blobUrl = URL.createObjectURL(compressed);
+    setImagePreview(blobUrl);
+    setAvatar(blobUrl);
+    setAvatarMode('photo');
   };
 
   const handleSave = async () => {
@@ -236,7 +236,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
     setSaving(true);
 
     let finalAvatar = avatar;
-    if (useImage && imageFile) {
+    if (avatarMode === 'photo' && imageFile) {
       try {
         const compressed = await compressImage(imageFile);
         const fileName = `profile_${Date.now()}.webp`;
@@ -247,89 +247,71 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
         const { data: urlData } = supabase.storage.from('profile-pictures').getPublicUrl(fileName);
         finalAvatar = urlData.publicUrl;
       } catch (err) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          finalAvatar = reader.result;
-          completeSave(finalAvatar);
-        };
-        reader.readAsDataURL(imageFile);
-        return;
+        finalAvatar = imagePreview;
       }
-    } else if (useImage && imagePreview?.startsWith('http')) {
-      finalAvatar = imagePreview;
     }
 
-    completeSave(finalAvatar);
-  };
-
-  const completeSave = (avatarUrl) => {
     let newGoals = profile?.goals || { cal: 2000, pro: 120, carb: 200, fat: 55 };
     let waterGoal = profile?.water_goal || 2000;
 
-    if (autoCalculate && weight && height && age) {
+    if (weight && height && age) {
       const bmr = calculateBMR(parseFloat(weight), parseFloat(height), parseInt(age), gender);
       const tdee = calculateTDEE(bmr, activityLevel);
-      newGoals = calculateMacroGoalsWithConditions(tdee, parseFloat(weight), goalType, healthConditions);
+      newGoals = calculateMacroGoals(tdee, parseFloat(weight), goalType, healthConditions);
       waterGoal = calculateWaterGoal(parseFloat(weight), activityLevel);
     }
 
-    // Hiperhidratación por Creatina y Suplementos (ISSN)
-    supplements.forEach(sup => {
-      const found = AVAILABLE_SUPPLEMENTS.find(s => s.name === sup.name);
-      if (found && found.waterPerGram > 0) {
-        waterGoal += Math.round((sup.dose_g || 0) * found.waterPerGram);
-      }
-    });
+    const generatedId = profile?.id || name.toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
 
     const updatedProfile = {
       ...profile,
-      name,
-      pin,
-      role,
+      id: generatedId,
+      name: name.trim(),
+      pin: pin.trim(),
+      role: role || 'Athlete',
       color,
-      avatar: avatarUrl,
+      avatar: finalAvatar,
       weight: parseFloat(weight) || null,
       height: parseFloat(height) || null,
       age: parseInt(age) || null,
       gender,
       activity_level: activityLevel,
       goal_type: goalType,
-      goal_weight: parseFloat(goalWeight) || null,
-      auto_calculate_macros: autoCalculate,
       health_conditions: healthConditions,
-      supplements,
       water_goal: waterGoal,
       goals: newGoals,
+      auto_calculate_macros: true
     };
 
-    setShowSuccess(true);
-    setTimeout(() => {
-      onSave(updatedProfile);
-      setShowSuccess(false);
-      setSaving(false);
-      toast.success('Perfil calibrado');
-    }, 500);
+    onSave(updatedProfile);
+    setSaving(false);
+    toast.success('Atleta actualizado');
   };
 
   const bmr = calculateBMR(parseFloat(weight) || 0, parseFloat(height) || 0, parseInt(age) || 0, gender);
   const tdee = bmr ? calculateTDEE(bmr, activityLevel) : null;
-  const suggestedGoals = (bmr && autoCalculate) ? calculateMacroGoalsWithConditions(tdee, parseFloat(weight) || 70, goalType, healthConditions) : null;
+  const suggestedGoals = bmr ? calculateMacroGoals(tdee, parseFloat(weight) || 70, goalType, healthConditions) : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#09090B]/95 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 select-none">
-      <div className="w-full sm:max-w-md bg-[#0A0A0C] border border-white/[0.07] sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col max-h-[90vh] shadow-2xl shadow-black/40 animate-slide-up">
+    <div className="fixed inset-0 z-50 bg-[#09090B]/95 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 select-none animate-fade-in">
+      <div className="w-full sm:max-w-md bg-[#0A0A0C] border border-white/[0.08] sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col max-h-[92vh] shadow-2xl shadow-black/80 overflow-hidden animate-slide-up">
         
-        <div className="flex justify-between items-center px-6 pt-6 pb-3">
-          <h2 className="text-lg font-bold text-white tracking-tight">
-            {profile ? 'Configuración de Atleta' : 'Nuevo Miembro'}
-          </h2>
-          <button onClick={onCancel} className="p-2 rounded-full bg-white/[0.03] text-zinc-400 hover:text-white">
-            <X size={20} />
+        {/* Cabecera */}
+        <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-white/[0.05]">
+          <div>
+            <h2 className="text-base font-black text-white tracking-tight uppercase font-sans">
+              {profile?.name ? `Editar Atleta: ${profile.name}` : 'Nuevo Miembro VIP'}
+            </h2>
+            <p className="text-[10px] text-zinc-400 font-mono">Calibración Biométrica y Preferencias</p>
+          </div>
+          <button onClick={onCancel} className="p-2 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white">
+            <X size={18} />
           </button>
         </div>
 
-        <div className="px-6 pb-3">
-          <div className="flex bg-white/[0.04] rounded-full p-1 gap-1 text-xs">
+        {/* Selector de Pestañas */}
+        <div className="px-6 py-2.5 bg-black/40 border-b border-white/[0.04] shrink-0">
+          <div className="flex bg-white/[0.04] rounded-2xl p-1 gap-1 text-xs">
             {[
               { key: 'profile', icon: User, label: 'Perfil' },
               { key: 'body', icon: Weight, label: 'Biometría' },
@@ -338,52 +320,218 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
             ].map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
+                type="button"
                 onClick={() => setTab(key)}
-                className={`flex-1 py-2.5 rounded-full font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  tab === key ? 'bg-[#D4FF00] text-[#09090B] shadow-md' : 'text-zinc-400 hover:text-white'
+                className={`flex-1 py-2 rounded-xl font-mono font-bold transition-all flex items-center justify-center gap-1 ${
+                  tab === key ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black' : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                <Icon size={13} />
-                {label}
+                <Icon size={12} />
+                <span className="text-[10px]">{label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+        {/* Contenido del Formulario */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
+          
+          {/* PESTAÑA 1: PERFIL & AVATAR */}
           {tab === 'profile' && (
-            <div className="space-y-4">
-              <div className="flex flex-col items-center gap-3">
-                <label className="relative w-20 h-20 rounded-full bg-white/[0.03] border-2 border-white/[0.08] flex items-center justify-center overflow-hidden cursor-pointer">
-                  <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                  {useImage && imagePreview ? (
-                    <img src={imagePreview} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-3xl">{avatar}</span>
+            <div className="space-y-4 animate-fade-in">
+              
+              {/* Preview Central */}
+              <div className="flex flex-col items-center gap-2.5">
+                <div className="relative w-28 h-28 rounded-full bg-[#050507] border-2 border-[#D4FF00] flex items-center justify-center overflow-hidden shadow-[0_0_25px_rgba(212,255,0,0.25)]">
+                  {imageLoading && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
+                      <Loader2 size={24} className="text-[#D4FF00] animate-spin" />
+                    </div>
                   )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Camera size={18} className="text-white" />
-                  </div>
-                </label>
 
-                <div className="flex gap-2">
-                  <button onClick={() => setUseImage(false)} className={`px-3 py-1 rounded-full text-xs ${!useImage ? 'bg-white/10 text-white font-bold' : 'text-zinc-500'}`}>Emoji</button>
-                  <button onClick={() => setUseImage(true)} className={`px-3 py-1 rounded-full text-xs ${useImage ? 'bg-white/10 text-white font-bold' : 'text-zinc-500'}`}>Foto</button>
+                  {avatarMode === 'emoji' ? (
+                    <span className="text-5xl">{avatar}</span>
+                  ) : (avatar?.startsWith('http') || imagePreview) ? (
+                    <img 
+                      key={imagePreview || avatar}
+                      src={imagePreview || avatar} 
+                      alt="" 
+                      className="w-full h-full object-cover"
+                      onLoad={() => setImageLoading(false)}
+                      onError={() => setImageLoading(false)}
+                    />
+                  ) : (
+                    <span className="text-3xl font-black text-white">{name.charAt(0) || 'A'}</span>
+                  )}
+                </div>
+
+                {/* Selector de Modo */}
+                <div className="flex bg-white/[0.04] p-1 rounded-xl border border-white/[0.06] text-xs font-mono">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAvatarMode('dicebear');
+                      const url = buildSeedUrl(dicebearStyle, dicebearSeed);
+                      setAvatar(url);
+                      setImagePreview(url);
+                    }}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                      avatarMode === 'dicebear' ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles size={12} /> Ilustración
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarMode('emoji')}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                      avatarMode === 'emoji' ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Smile size={12} /> Emoji
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAvatarMode('photo');
+                      fileRef.current?.click();
+                    }}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                      avatarMode === 'photo' ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Camera size={12} /> Foto
+                  </button>
                 </div>
               </div>
 
+              {/* Generador de Ilustración */}
+              {avatarMode === 'dicebear' && (
+                <div className="bg-black/60 border border-white/[0.08] p-4 rounded-2xl space-y-3 animate-fade-in">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                      Estilo de Ilustración
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {DICEBEAR_STYLES.map(st => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => handleStyleChange(st.id)}
+                          className={`p-2 rounded-xl text-[10px] font-mono font-bold text-left truncate transition-all ${
+                            dicebearStyle === st.id
+                              ? 'bg-[#D4FF00] text-[#09090B] shadow-md'
+                              : 'bg-white/[0.03] text-zinc-400 border border-white/[0.06] hover:text-white'
+                          }`}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase">
+                        Palabra Clave / Semilla
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRandomSeed}
+                        className="text-[10px] font-mono text-[#D4FF00] hover:underline flex items-center gap-1 font-bold"
+                      >
+                        <RefreshCw size={11} /> Aleatorio 🎲
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={dicebearSeed}
+                      onChange={e => handleSeedChange(e.target.value)}
+                      placeholder="Escribe un apodo o palabra..."
+                      className="w-full bg-black/80 border border-white/[0.1] rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#D4FF00] font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Modo Emoji */}
+              {avatarMode === 'emoji' && (
+                <div className="flex flex-wrap gap-2 p-3 bg-black/40 rounded-2xl border border-white/[0.05] justify-center animate-fade-in">
+                  {EMOJIS.map(em => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => setAvatar(em)}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all ${
+                        avatar === em ? 'bg-[#D4FF00]/20 border border-[#D4FF00] scale-110' : 'bg-white/[0.02] border border-white/[0.04]'
+                      }`}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+
+              {/* Color de Identidad */}
               <div>
-                <label className="text-[11px] font-bold text-zinc-400 block mb-1">Nombre</label>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Color de Identidad</label>
+                <div className="flex gap-2 flex-wrap justify-center bg-black/40 p-2.5 rounded-2xl border border-white/[0.05]">
+                  {COLORS.map(c => {
+                    const isSelected = color === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setColor(c.id)}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-md ${
+                          isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0A0A0C] scale-110' : 'opacity-70 hover:opacity-100'
+                        }`}
+                        style={{ backgroundColor: c.hex }}
+                        title={c.label}
+                      >
+                        {isSelected && <Check size={12} className="text-white drop-shadow-md" strokeWidth={3.5} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Nombre y Rol */}
+              <div>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Nombre Completo</label>
                 <input
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Tu nombre"
-                  className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white outline-none focus:border-[#D4FF00]"
+                  placeholder="Ej: Carlos Pérez"
+                  className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-xs text-white outline-none focus:border-[#D4FF00] font-sans font-bold"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-zinc-400 block mb-1">PIN (4 dígitos, opcional)</label>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Rol / Nivel</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {ROLES.map(r => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-mono font-bold transition-all ${
+                        role === r
+                          ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_10px_rgba(212,255,0,0.3)] font-black'
+                          : 'bg-white/[0.03] text-zinc-400 border border-white/[0.06] hover:text-white'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">PIN (4 Dígitos, Opcional)</label>
                 <input
                   type="password"
                   inputMode="numeric"
@@ -391,130 +539,184 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                   value={pin}
                   onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="••••"
-                  className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white outline-none focus:border-[#D4FF00]"
+                  className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-center text-sm font-mono tracking-widest text-[#D4FF00] outline-none focus:border-[#D4FF00]"
                 />
               </div>
             </div>
           )}
 
+          {/* PESTAÑA 2: BIOMETRÍA (100% IDÉNTICO A ONBOARDINGWIZARD) */}
           {tab === 'body' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">Peso (kg)</label>
-                  <input type="number" step="0.1" inputMode="decimal" value={weight} onChange={e => setWeight(e.target.value)} placeholder="70" className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white outline-none focus:border-[#D4FF00]" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">Estatura (cm)</label>
-                  <input type="number" step="0.5" inputMode="decimal" value={height} onChange={e => setHeight(e.target.value)} placeholder="170" className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white outline-none focus:border-[#D4FF00]" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">Edad</label>
-                  <input type="number" inputMode="numeric" value={age} onChange={e => setAge(e.target.value)} placeholder="25" className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white outline-none focus:border-[#D4FF00]" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">Sexo Biológico</label>
-                  <select value={gender} onChange={e => setGender(e.target.value)} className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-sm text-white outline-none">
-                    <option value="male">Hombre</option>
-                    <option value="female">Mujer</option>
-                  </select>
-                </div>
-              </div>
-
+            <div className="space-y-4 animate-fade-in">
+              
+              {/* Sexo Biológico */}
               <div>
-                <label className="text-[10px] font-bold text-zinc-400 block mb-1">Nivel de Actividad (PAL)</label>
-                <select value={activityLevel} onChange={e => setActivityLevel(e.target.value)} className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-xs text-white outline-none">
-                  {ACTIVITY_LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Sexo Biológico</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGender('male')}
+                    className={`flex-1 py-3 rounded-xl border text-xs font-bold transition-all ${
+                      gender === 'male'
+                        ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-md'
+                        : 'border-white/[0.08] text-zinc-400'
+                    }`}
+                  >
+                    🙋‍♂️ Hombre
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('female')}
+                    className={`flex-1 py-3 rounded-xl border text-xs font-bold transition-all ${
+                      gender === 'female'
+                        ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-md'
+                        : 'border-white/[0.08] text-zinc-400'
+                    }`}
+                  >
+                    🙋‍♀️ Mujer
+                  </button>
+                </div>
               </div>
 
+              {/* Edad, Peso y Altura */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Edad (años)</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={age}
+                    onChange={e => setAge(e.target.value)}
+                    placeholder="25"
+                    className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-2.5 text-xs text-center text-white font-mono font-bold outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Peso (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    value={weight}
+                    onChange={e => setWeight(e.target.value)}
+                    placeholder="70"
+                    className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-2.5 text-xs text-center text-white font-mono font-bold outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Estatura (cm)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    inputMode="decimal"
+                    value={height}
+                    onChange={e => setHeight(e.target.value)}
+                    placeholder="175"
+                    className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-2.5 text-xs text-center text-white font-mono font-bold outline-none focus:border-[#D4FF00]"
+                  />
+                </div>
+              </div>
+
+              {/* Nivel de Actividad (PAL) */}
               <div>
-                <label className="text-[10px] font-bold text-zinc-400 block mb-1">Objetivo</label>
-                <select value={goalType} onChange={e => setGoalType(e.target.value)} className="w-full bg-[#09090B] border border-white/[0.08] rounded-xl p-3 text-xs text-white outline-none">
-                  {GOAL_TYPES.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Nivel de Actividad (PAL)</label>
+                <div className="space-y-1.5">
+                  {ACTIVITY_LEVELS.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setActivityLevel(opt.value)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all ${
+                        activityLevel === opt.value
+                          ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-sm'
+                          : 'border-white/[0.06] text-zinc-400 hover:border-white/10'
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-white block">{opt.label}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">{opt.sub}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              {/* Objetivo Metabólico */}
+              <div>
+                <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Objetivo Metabólico</label>
+                <div className="space-y-1.5">
+                  {GOAL_TYPES.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setGoalType(opt.value)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3 ${
+                        goalType === opt.value
+                          ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-sm'
+                          : 'border-white/[0.06] text-zinc-400 hover:border-white/10'
+                      }`}
+                    >
+                      <span className="text-xl">{opt.icon}</span>
+                      <div>
+                        <span className="text-xs font-bold text-white block">{opt.label}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">{opt.desc}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Resumen Calculado en Vivo */}
               {bmr > 0 && (
-                <div className="bg-black/60 border border-white/[0.06] rounded-2xl p-4 space-y-2 font-mono text-xs">
-                  <span className="text-[#D4FF00] font-bold block text-[10px] uppercase">Cálculo Científico Basal:</span>
+                <div className="bg-black/60 border border-white/[0.08] rounded-2xl p-4 space-y-2.5 font-mono text-xs">
+                  <span className="text-[#D4FF00] font-bold block text-[10px] uppercase tracking-wider">
+                    Telemetría y Metas Calculadas:
+                  </span>
                   <div className="grid grid-cols-2 gap-2 text-zinc-400">
-                    <div>TMB: <strong className="text-white">{bmr} kcal</strong></div>
-                    <div>TDEE: <strong className="text-white">{tdee} kcal</strong></div>
-                    <div>Meta: <strong className="text-[#D4FF00]">{suggestedGoals?.cal} kcal</strong></div>
-                    <div>Proteína: <strong className="text-blue-400">{suggestedGoals?.pro}g</strong></div>
+                    <div>Tasa Metabólica Basal: <strong className="text-white block">{bmr} kcal</strong></div>
+                    <div>Gasto Diario (TDEE): <strong className="text-white block">{tdee} kcal</strong></div>
+                    <div>Calorías Objetivo: <strong className="text-[#D4FF00] block">{suggestedGoals?.cal} kcal</strong></div>
+                    <div>Proteína Diaria: <strong className="text-blue-400 block">{suggestedGoals?.pro}g</strong></div>
+                    <div>Carbohidratos: <strong className="text-purple-400 block">{suggestedGoals?.carb}g</strong></div>
+                    <div>Grasas Saludables: <strong className="text-amber-400 block">{suggestedGoals?.fat}g</strong></div>
                   </div>
                 </div>
               )}
             </div>
           )}
 
+          {/* PESTAÑA 3: SALUD */}
           {tab === 'health' && (
-            <div className="space-y-4">
-              <p className="text-xs text-zinc-400">Ajustes hormonales y metabólicos:</p>
+            <div className="space-y-3.5 animate-fade-in">
+              <p className="text-xs text-zinc-400 font-mono">Condiciones médicas y metabólicas para ajustar macros:</p>
               <div className="space-y-2">
                 {HEALTH_CONDITIONS.map(cond => (
                   <label key={cond.value} className="flex items-center gap-3 bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={healthConditions.includes(cond.value)}
-                      onChange={() => toggleCondition(cond.value)}
+                      onChange={() => {
+                        setHealthConditions(prev =>
+                          prev.includes(cond.value) ? prev.filter(c => c !== cond.value) : [...prev, cond.value]
+                        );
+                      }}
                       className="accent-[#D4FF00]"
                     />
                     <span className="text-xs text-white font-medium">{cond.label}</span>
                   </label>
                 ))}
               </div>
-
-              <div className="pt-2">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">Suplementación con requerimiento hídrico</span>
-                <div className="space-y-2">
-                  {supplements.map((sup, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-black/50 p-2 rounded-xl border border-white/[0.05]">
-                      <select
-                        value={sup.name}
-                        onChange={e => {
-                          const n = [...supplements];
-                          n[idx].name = e.target.value;
-                          setSupplements(n);
-                        }}
-                        className="flex-1 bg-transparent text-xs text-white outline-none"
-                      >
-                        <option value="">Seleccionar...</option>
-                        {AVAILABLE_SUPPLEMENTS.map(opt => <option key={opt.name} value={opt.name}>{opt.name}</option>)}
-                      </select>
-                      <input
-                        type="number"
-                        placeholder="g/día"
-                        value={sup.dose_g || ''}
-                        onChange={e => {
-                          const n = [...supplements];
-                          n[idx].dose_g = parseFloat(e.target.value) || 0;
-                          setSupplements(n);
-                        }}
-                        className="w-16 bg-black border border-white/[0.1] rounded-lg p-1.5 text-xs text-center text-white"
-                      />
-                      <button onClick={() => setSupplements(prev => prev.filter((_, i) => i !== idx))} className="text-zinc-500 hover:text-red-400">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => setSupplements(prev => [...prev, { name: '', dose_g: 5 }])}
-                    className="w-full py-2.5 border border-dashed border-white/[0.1] rounded-xl text-xs font-bold text-zinc-400 hover:text-[#D4FF00]"
-                  >
-                    + Añadir suplemento
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
+          {/* PESTAÑA 4: ALARMAS */}
           {tab === 'reminders' && (
-            <div className="space-y-4">
+            <div className="space-y-3 animate-fade-in">
               <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4">
-                <span className="text-xs font-bold text-white">Recordatorio de Agua</span>
+                <div>
+                  <span className="text-xs font-bold text-white block">Recordatorio de Agua</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">Notificación periódica para hidratarte</span>
+                </div>
                 <button
+                  type="button"
                   onClick={() => updateReminders({ ...reminders, water: { ...reminders.water, enabled: !reminders.water.enabled } })}
                   className={`w-11 h-6 rounded-full transition-colors relative ${reminders.water.enabled ? 'bg-[#D4FF00]' : 'bg-zinc-800'}`}
                 >
@@ -525,13 +727,21 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
           )}
         </div>
 
-        <div className="px-6 pb-6 pt-2">
+        {/* Footer con Guardado */}
+        <div className="p-5 border-t border-white/[0.06] bg-[#0A0A0C] shrink-0">
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-[0_0_20px_rgba(212,255,0,0.3)]"
+            className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-[0_0_25px_rgba(212,255,0,0.35)] font-mono"
           >
-            {saving ? 'Calibrando...' : 'Guardar y Calibrar'}
+            {saving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Guardando Atleta...
+              </>
+            ) : (
+              'Guardar y Aplicar Cambios'
+            )}
           </button>
         </div>
       </div>
