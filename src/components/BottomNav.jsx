@@ -18,16 +18,16 @@ const triggerHaptic = (ms = 18) => {
 export default function BottomNav({ activeTab, setActiveTab, pendingWorkout }) {
   return (
     <>
-      {/* Cortina de degradado oscura para que el scroll se desvanezca con elegancia */}
+      {/* Cortina de degradado oscura para desvanecer el scroll */}
       <div className="fixed bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-[#050507] via-[#050507]/90 to-transparent pointer-events-none z-40" />
 
-      {/* Dock Flotante de Cristal de Zafiro Opaco (Sin transparencias sucias) */}
+      {/* Dock Flotante de Cristal Obsidiana */}
       <nav
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md pointer-events-auto select-none"
         role="navigation"
         aria-label="Navegación principal"
       >
-        <div className="bg-[#0C0C12] border border-white/[0.12] rounded-[2.25rem] px-2.5 py-2 flex justify-around items-center relative shadow-[0_20px_50px_rgba(0,0,0,0.95),0_0_20px_rgba(212,255,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.15)] safe-bottom">
+        <div className="bg-[#0C0C12]/95 border border-white/[0.12] rounded-[2.25rem] px-2.5 py-2 flex justify-around items-center relative shadow-[0_20px_50px_rgba(0,0,0,0.95),0_0_20px_rgba(212,255,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-2xl safe-bottom">
           
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -73,7 +73,7 @@ export default function BottomNav({ activeTab, setActiveTab, pendingWorkout }) {
                   )}
                 </div>
 
-                {/* Micro-texto en tipografía monoespaciada */}
+                {/* Micro-texto */}
                 <span className={`text-[9px] font-mono tracking-[0.18em] uppercase transition-all duration-300 ${
                   isActive ? 'font-black text-[#D4FF00] opacity-100' : 'font-semibold text-zinc-500 opacity-60'
                 }`}>

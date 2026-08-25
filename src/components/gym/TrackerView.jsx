@@ -9,6 +9,7 @@ import {
 import ExerciseDetailModal from './ExerciseDetailModal';
 import { fetchAllExercises } from '../../lib/dataService';
 
+// Generador de sonido sintético para el descanso
 const playBeep = (freq = 880, duration = 0.45) => {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -18,19 +19,21 @@ const playBeep = (freq = 880, duration = 0.45) => {
     gain.connect(ctx.destination);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + duration);
   } catch (e) {}
 };
 
+// Disparador de vibración táctil
 const triggerHaptic = (pattern = 25) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try { navigator.vibrate(pattern); } catch (e) {}
   }
 };
 
+// Canvas de Confeti para Nuevos Récords (PR)
 const ConfettiCanvas = () => {
   const canvasRef = useRef(null);
 
@@ -42,7 +45,7 @@ const ConfettiCanvas = () => {
     canvas.height = window.innerHeight;
 
     const colors = ['#D4FF00', '#00F5FF', '#FF2A55', '#B347FF', '#FFFFFF', '#FFD700'];
-    const particles = Array.from({ length: 90 }, () => ({
+    const particles = Array.from({ length: 80 }, () => ({
       x: canvas.width / 2,
       y: canvas.height / 2,
       vx: (Math.random() - 0.5) * 14,
@@ -87,6 +90,14 @@ const ConfettiCanvas = () => {
   return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-[250]" />;
 };
 
+// Configuración de visualización de RIR
+const RIR_CONFIG = {
+  0: { label: 'R0', name: 'Fallo', bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/50' },
+  1: { label: 'R1', name: 'Límite', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/50' },
+  2: { label: 'R2', name: 'Óptimo', bg: 'bg-[#D4FF00]/20', text: 'text-[#D4FF00]', border: 'border-[#D4FF00]/50' },
+  3: { label: 'R3+', name: 'Reserva', bg: 'bg-sky-500/20', text: 'text-sky-400', border: 'border-sky-500/50' }
+};
+
 export default function TrackerView({
   routineData,
   activeRoutine,
@@ -99,13 +110,15 @@ export default function TrackerView({
   onGoBack
 }) {
   const [exercises, setExercises] = useState(() => {
-    return routineData.exercises.map(ex => ({
+    return (routineData?.exercises || []).map(ex => ({
       ...ex,
-      sets: ex.sets.map((s, idx) => ({
+      sets: (ex.sets || []).map((s, idx) => ({
         ...s,
+        weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
+        reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10',
+        repsDone: s.repsDone !== undefined && s.repsDone !== null ? String(s.repsDone) : (s.done ? String(s.reps || '10') : ''),
         setNum: s.setNum || idx + 1,
-        rir: s.rir ?? 2,
-        repsDone: s.repsDone || (s.done ? (s.reps || '') : '')
+        rir: s.rir ?? 2
       }))
     }));
   });
@@ -125,6 +138,7 @@ export default function TrackerView({
   const exerciseRefs = useRef({});
   const DRAFT_KEY = `draft_${activeRoutine.id}_${activeDayIndex}`;
 
+  // Mantener pantalla encendida
   useEffect(() => {
     let wakeLock = null;
     const requestWakeLock = async () => {
@@ -153,12 +167,14 @@ export default function TrackerView({
     };
   }, []);
 
+  // Cargar ejercicios de biblioteca
   useEffect(() => {
     fetchAllExercises()
       .then(data => setLibraryExercises(data || []))
       .catch(err => console.warn('Error cargando ejercicios:', err));
   }, []);
 
+  // Cargar borrador previo
   useEffect(() => {
     const saved = localStorage.getItem(DRAFT_KEY);
     if (saved) {
@@ -167,8 +183,11 @@ export default function TrackerView({
         if (Array.isArray(parsed) && parsed.length > 0) {
           setExercises(parsed.map(ex => ({
             ...ex,
-            sets: ex.sets.map((s, idx) => ({
+            sets: (ex.sets || []).map((s, idx) => ({
               ...s,
+              weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
+              reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10',
+              repsDone: s.repsDone !== undefined && s.repsDone !== null ? String(s.repsDone) : '',
               setNum: s.setNum || idx + 1,
               rir: s.rir ?? 2
             }))
@@ -178,6 +197,7 @@ export default function TrackerView({
     }
   }, [DRAFT_KEY]);
 
+  // Expandir primer ejercicio incompleto
   useEffect(() => {
     const firstIncomplete = exercises.find(ex => ex.sets.some(s => !s.done));
     if (firstIncomplete) {
@@ -187,6 +207,7 @@ export default function TrackerView({
     }
   }, []);
 
+  // Guardar borrador automático
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(exercises));
@@ -194,6 +215,7 @@ export default function TrackerView({
     return () => clearTimeout(timer);
   }, [exercises, DRAFT_KEY]);
 
+  // Temporizador de descanso
   useEffect(() => {
     if (restTimer.running && restTimer.seconds > 0) {
       timerRef.current = setInterval(() => {
@@ -214,6 +236,7 @@ export default function TrackerView({
     return () => clearInterval(timerRef.current);
   }, [restTimer.running, soundEnabled]);
 
+  // Completar o desmarcar serie
   const toggleSetDone = (exerciseId, setId) => {
     let wasCompleted = false;
     let completedExName = '';
@@ -235,7 +258,7 @@ export default function TrackerView({
             ...s,
             setNum: s.setNum || idx + 1,
             done: nextDone,
-            repsDone: nextDone && !s.repsDone ? (s.reps || '10') : s.repsDone
+            repsDone: nextDone && !s.repsDone ? (s.reps || '10') : (s.repsDone ?? '')
           };
         })
       };
@@ -266,6 +289,7 @@ export default function TrackerView({
     }
   };
 
+  // Ajuste ergonómico de peso
   const handleWeightStep = (exerciseId, setId, delta) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -275,13 +299,14 @@ export default function TrackerView({
           if (s.id !== setId) return s;
           const current = parseFloat(s.weight) || 0;
           const next = Math.max(0, parseFloat((current + delta).toFixed(1)));
-          return { ...s, weight: next.toString() };
+          return { ...s, weight: String(next) };
         })
       };
     }));
-    triggerHaptic(15);
+    triggerHaptic(18);
   };
 
+  // Ajuste ergonómico de repeticiones
   const handleRepsStep = (exerciseId, setId, delta) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -289,16 +314,34 @@ export default function TrackerView({
         ...ex,
         sets: ex.sets.map(s => {
           if (s.id !== setId) return s;
-          const baseVal = s.repsDone !== '' ? s.repsDone : (s.reps || '10');
+          const baseVal = s.repsDone !== '' && s.repsDone !== undefined ? s.repsDone : (s.reps || '10');
           const current = parseInt(baseVal) || 0;
           const next = Math.max(0, current + delta);
-          return { ...s, repsDone: next.toString() };
+          return { ...s, repsDone: String(next) };
         })
       };
     }));
-    triggerHaptic(15);
+    triggerHaptic(18);
   };
 
+  // Cambiar RIR con un solo toque (0 -> 1 -> 2 -> 3 -> 0)
+  const cycleRIR = (exerciseId, setId) => {
+    setExercises(prev => prev.map(ex => {
+      if (ex.id !== exerciseId) return ex;
+      return {
+        ...ex,
+        sets: ex.sets.map(s => {
+          if (s.id !== setId) return s;
+          const currentRIR = s.rir ?? 2;
+          const nextRIR = currentRIR === 3 ? 0 : currentRIR + 1;
+          return { ...s, rir: nextRIR };
+        })
+      };
+    }));
+    triggerHaptic(22);
+  };
+
+  // Copiar serie anterior
   const copyFromPreviousSet = (exerciseId, setIndex) => {
     if (setIndex === 0) return;
     setExercises(prev => prev.map(ex => {
@@ -310,9 +353,9 @@ export default function TrackerView({
           if (idx !== setIndex) return s;
           return {
             ...s,
-            weight: prevSet.weight || s.weight,
-            repsDone: prevSet.repsDone || prevSet.reps || s.repsDone,
-            rir: prevSet.rir ?? s.rir
+            weight: String(prevSet.weight ?? s.weight ?? ''),
+            repsDone: String(prevSet.repsDone || prevSet.reps || s.repsDone || ''),
+            rir: prevSet.rir ?? s.rir ?? 2
           };
         })
       };
@@ -320,16 +363,18 @@ export default function TrackerView({
     triggerHaptic(25);
   };
 
+  // Actualizar inputs directos
   const updateSetInput = (exerciseId, setId, field, value) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
       return {
         ...ex,
-        sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: value } : s)
+        sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: String(value) } : s)
       };
     }));
   };
 
+  // Finalizar sesión
   const handleFinish = () => {
     const completedExercises = exercises.map(ex => ({
       id: ex.id,
@@ -337,7 +382,7 @@ export default function TrackerView({
       libraryExerciseId: ex.libraryExerciseId,
       sets: ex.sets.map((s, idx) => ({
         setNum: s.setNum || idx + 1,
-        weight: s.weight || '',
+        weight: s.weight ?? '',
         reps: s.repsDone || s.reps || '',
         rir: s.rir ?? 2,
         done: Boolean(s.done)
@@ -356,7 +401,7 @@ export default function TrackerView({
     onFinish(session);
   };
 
-  const dayName = routineData.trainingDays[activeDayIndex]?.name || `Día ${activeDayIndex + 1}`;
+  const dayName = routineData?.trainingDays?.[activeDayIndex]?.name || `Día ${activeDayIndex + 1}`;
 
   const formatTime = (sec) => {
     const m = Math.floor(sec / 60);
@@ -389,7 +434,7 @@ export default function TrackerView({
       
       {newPrCelebration && <ConfettiCanvas />}
 
-      {/* Modal Celebración de PR */}
+      {/* MODAL NUEVO RÉCORD (PR) */}
       {newPrCelebration && (
         <div className="fixed inset-0 z-[260] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-scale-in">
           <div className="luxury-card p-6 max-w-xs w-full text-center space-y-4 border-[#D4FF00] shadow-[0_0_40px_rgba(212,255,0,0.3)]">
@@ -416,53 +461,13 @@ export default function TrackerView({
               onClick={() => setNewPrCelebration(null)}
               className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95"
             >
-              ¡A SEGUIR ROMPIÉNDOLA!
+              ¡A SEGUIR ENTRENANDO!
             </button>
           </div>
         </div>
       )}
 
-      {/* HUD de Descanso */}
-      {restTimer.active && (
-        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40 glass-dock-surface rounded-full px-5 py-2.5 flex items-center gap-3.5 shadow-[0_15px_35px_rgba(0,0,0,0.8),0_0_20px_rgba(212,255,0,0.25)] animate-fade-in">
-          <div className="flex items-center gap-2">
-            <Timer size={16} className={`text-[#D4FF00] ${restTimer.running ? 'animate-pulse drop-shadow-[0_0_8px_#D4FF00]' : ''}`} />
-            <span className="text-white font-mono font-black text-base tabular-nums tracking-tighter">
-              {formatTime(restTimer.seconds)}
-            </span>
-          </div>
-          <div className="h-4 w-[1px] bg-white/10" />
-          <button
-            onClick={() => {
-              triggerHaptic(15);
-              setRestTimer(prev => ({ ...prev, running: !prev.running }));
-            }}
-            className="p-1.5 rounded-full bg-white/[0.06] text-zinc-300 hover:text-white active:scale-90 transition-all"
-          >
-            {restTimer.running ? <Pause size={13} /> : <Play size={13} />}
-          </button>
-          <button
-            onClick={() => {
-              triggerHaptic(15);
-              setSoundEnabled(!soundEnabled);
-            }}
-            className="p-1.5 rounded-full bg-white/[0.06] text-zinc-400 hover:text-[#D4FF00] transition-colors"
-          >
-            {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
-          </button>
-          <button
-            onClick={() => {
-              triggerHaptic(20);
-              setRestTimer({ active: false, seconds: 90, running: false, totalSeconds: 90 });
-            }}
-            className="text-[10px] font-mono font-extrabold text-zinc-500 hover:text-rose-400 uppercase tracking-widest pl-1 transition-colors"
-          >
-            Omitir
-          </button>
-        </div>
-      )}
-
-      {/* Header */}
+      {/* HEADER SUPERIOR */}
       <div className="flex justify-between items-center px-5 pt-4 pb-2.5 shrink-0 bg-[#050507]/95 backdrop-blur-2xl z-10 border-b border-white/[0.05]">
         <div className="min-w-0 flex-1 pr-2">
           <div className="flex items-center gap-2">
@@ -484,7 +489,64 @@ export default function TrackerView({
         </button>
       </div>
 
-      {/* Ticker de Volumen */}
+      {/* TIMER DE DESCANSO SUPERIOR */}
+      {restTimer.active && (
+        <div className="px-4 py-2 shrink-0 bg-[#0A0A0F] border-b border-[#D4FF00]/20 flex items-center justify-between shadow-[0_4px_20px_rgba(0,0,0,0.6)] animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className={`p-1.5 rounded-lg bg-[#D4FF00]/10 text-[#D4FF00] ${restTimer.running ? 'animate-pulse' : ''}`}>
+              <Timer size={16} />
+            </div>
+            <div>
+              <span className="text-[9px] font-mono uppercase text-zinc-400 font-bold block">Descanso sugerido</span>
+              <span className="text-white font-mono font-black text-base tabular-nums leading-tight">
+                {formatTime(restTimer.seconds)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                triggerHaptic(15);
+                setRestTimer(prev => ({ ...prev, seconds: prev.seconds + 30 }));
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-mono font-bold text-zinc-300 active:scale-90"
+            >
+              +30s
+            </button>
+            <button
+              onClick={() => {
+                triggerHaptic(15);
+                setRestTimer(prev => ({ ...prev, running: !prev.running }));
+              }}
+              className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-300 hover:text-white active:scale-90"
+            >
+              {restTimer.running ? <Pause size={13} /> : <Play size={13} />}
+            </button>
+            <button
+              onClick={() => {
+                triggerHaptic(15);
+                setSoundEnabled(!soundEnabled);
+              }}
+              className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-[#D4FF00]"
+            >
+              {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+            </button>
+            <button
+              onClick={() => {
+                triggerHaptic(20);
+                setRestTimer({ active: false, seconds: 90, running: false, totalSeconds: 90 });
+              }}
+              className="p-2 text-zinc-500 hover:text-rose-400 active:scale-90"
+              title="Cerrar temporizador"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TICKER DE VOLUMEN TOTAL */}
       <div className="px-5 py-2 shrink-0 bg-[#050507]">
         <div className="bg-[#0A0A0F] border border-white/[0.06] rounded-2xl px-4 py-2 flex justify-between items-center shadow-inner-light">
           <div className="flex items-center gap-2">
@@ -499,8 +561,8 @@ export default function TrackerView({
         </div>
       </div>
 
-      {/* Listado de ejercicios */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-44 space-y-3 touch-pan-y no-scrollbar">
+      {/* LISTADO DE EJERCICIOS Y SERIES ERGONÓMICAS */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-36 space-y-3 touch-pan-y no-scrollbar">
         {exercises.map((ex, exIdx) => {
           const exKey = ex.libraryExerciseId || ex.id;
           const record = personalRecords?.[exKey];
@@ -523,6 +585,7 @@ export default function TrackerView({
                   : 'bg-[#0A0A0F]/80 border-white/[0.06] hover:border-white/10'
               }`}
             >
+              {/* Encabezado del ejercicio */}
               <div
                 onClick={() => {
                   triggerHaptic(15);
@@ -544,7 +607,7 @@ export default function TrackerView({
                         setDetailExercise(matched ? { ...ex, ...matched } : ex);
                       }}
                       className="p-1 text-zinc-500 hover:text-[#D4FF00] rounded-full transition-colors"
-                      title="Ver técnica"
+                      title="Ver técnica del ejercicio"
                     >
                       <Info size={14} />
                     </button>
@@ -581,6 +644,7 @@ export default function TrackerView({
                 </div>
               </div>
 
+              {/* Barra de progreso */}
               <div className="px-4 pb-2">
                 <div className="w-full bg-black/60 rounded-full h-1 overflow-hidden border border-white/[0.04]">
                   <div
@@ -592,155 +656,159 @@ export default function TrackerView({
                 </div>
               </div>
 
+              {/* Contenido expandido con series SIN ENCIMARSE */}
               {isExpanded && (
                 <div className="px-3 pb-4 pt-1.5 border-t border-white/[0.04] space-y-2.5 bg-black/30 animate-fade-in">
+                  
+                  {/* Herramientas de Barra y Calentamiento */}
                   <div className="flex items-center justify-between gap-2 pt-1 pb-1">
                     <button
                       onClick={() => setPlateCalcTarget({ name: ex.name, weight: activeWeight || 60 })}
-                      className="px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-zinc-300 hover:text-[#D4FF00] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all"
+                      className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-zinc-300 hover:text-[#D4FF00] hover:border-[#D4FF00]/40 flex items-center gap-1.5 transition-all active:scale-95"
                     >
-                      <Disc size={12} className="text-[#D4FF00]" /> Discos en barra
+                      <Disc size={13} className="text-[#D4FF00]" /> Discos en barra
                     </button>
 
                     <button
                       onClick={() => setWarmupTarget({ name: ex.name, weight: activeWeight || 80 })}
-                      className="px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-zinc-300 hover:text-amber-400 hover:border-amber-400/40 flex items-center gap-1.5 transition-all"
+                      className="px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[10px] font-mono text-zinc-300 hover:text-amber-400 hover:border-amber-400/40 flex items-center gap-1.5 transition-all active:scale-95"
                     >
-                      <Flame size={12} className="text-amber-400" /> Calentamiento
+                      <Flame size={13} className="text-amber-400" /> Calentamiento
                     </button>
                   </div>
 
-                  {/* Encabezado con anchos proporcionales */}
-                  <div className="grid grid-cols-12 text-center text-[9px] font-mono font-black text-zinc-500 uppercase tracking-widest px-1">
-                    <div className="col-span-1">#</div>
-                    <div className="col-span-4">PESO (KG)</div>
-                    <div className="col-span-2">RIR</div>
-                    <div className="col-span-4">REPETICIONES</div>
-                    <div className="col-span-1">✓</div>
-                  </div>
+                  {/* Tarjetas de Series Ergonómicas (2 Niveles) */}
+                  {ex.sets.map((set, setIdx) => {
+                    const rirData = RIR_CONFIG[set.rir ?? 2] || RIR_CONFIG[2];
 
-                  {/* Filas de series calibradas ergonómicamente */}
-                  {ex.sets.map((set, setIdx) => (
-                    <div
-                      key={set.id}
-                      className={`grid grid-cols-12 items-center gap-1 py-2 px-2 rounded-2xl border transition-all ${
-                        set.done
-                          ? 'bg-[#D4FF00]/10 border-[#D4FF00]/40 shadow-[0_0_15px_rgba(212,255,0,0.15)]'
-                          : 'bg-[#050507]/60 border-white/[0.05]'
-                      }`}
-                    >
-                      {/* Número de Serie */}
-                      <div className="col-span-1 flex justify-center">
-                        <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-mono font-black ${
-                          set.done ? 'bg-[#D4FF00] text-[#050507]' : 'bg-white/[0.04] text-[#D4FF00]'
-                        }`}>
-                          {set.setNum || setIdx + 1}
-                        </span>
-                      </div>
+                    return (
+                      <div
+                        key={set.id}
+                        className={`p-3 rounded-2xl border transition-all space-y-2.5 ${
+                          set.done
+                            ? 'bg-[#D4FF00]/10 border-[#D4FF00]/40 shadow-[0_0_15px_rgba(212,255,0,0.15)]'
+                            : 'bg-[#050507]/90 border-white/[0.06]'
+                        }`}
+                      >
+                        {/* Nivel 1: Serie # + Selector RIR + Botón de Check */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-black ${
+                              set.done ? 'bg-[#D4FF00] text-[#050507]' : 'bg-white/[0.06] text-[#D4FF00]'
+                            }`}>
+                              S{set.setNum || setIdx + 1}
+                            </span>
 
-                      {/* Peso con Steppers compactos */}
-                      <div className="col-span-4 flex items-center justify-center gap-0.5">
-                        <button
-                          type="button"
-                          disabled={set.done}
-                          onClick={() => handleWeightStep(ex.id, set.id, -2.5)}
-                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
-                        >
-                          <Minus size={9} />
-                        </button>
-                        <input
-                          type="number"
-                          step="0.5"
-                          inputMode="decimal"
-                          value={set.weight}
-                          disabled={set.done}
-                          onChange={e => updateSetInput(ex.id, set.id, 'weight', e.target.value)}
-                          placeholder="0"
-                          className="w-10 h-7 bg-black/70 border border-white/[0.1] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
-                        />
-                        <button
-                          type="button"
-                          disabled={set.done}
-                          onClick={() => handleWeightStep(ex.id, set.id, 2.5)}
-                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
-                        >
-                          <Plus size={9} />
-                        </button>
-                      </div>
+                            <button
+                              type="button"
+                              disabled={set.done}
+                              onClick={() => cycleRIR(ex.id, set.id)}
+                              className={`px-2.5 py-1 rounded-lg border text-[10px] font-mono font-black flex items-center gap-1 transition-all active:scale-90 disabled:opacity-50 ${rirData.bg} ${rirData.text} ${rirData.border}`}
+                              title={`Toca para cambiar RIR (Actual: ${rirData.name})`}
+                            >
+                              <span>RIR:</span>
+                              <strong>{rirData.label}</strong>
+                              <span className="opacity-60 text-[8px]">({rirData.name})</span>
+                            </button>
+                          </div>
 
-                      {/* Selector Compacto de RIR (Sin desborde) */}
-                      <div className="col-span-2 flex justify-center">
-                        <select
-                          disabled={set.done}
-                          value={set.rir ?? 2}
-                          onChange={e => updateSetInput(ex.id, set.id, 'rir', parseInt(e.target.value))}
-                          className="w-full bg-black/70 border border-white/[0.1] rounded-lg text-[10px] font-mono font-black text-[#D4FF00] py-1 text-center outline-none disabled:opacity-50 cursor-pointer"
-                          title="Reps en Reserva (RIR)"
-                        >
-                          <option value={0}>R0</option>
-                          <option value={1}>R1</option>
-                          <option value={2}>R2</option>
-                          <option value={3}>R3+</option>
-                        </select>
-                      </div>
+                          <div className="flex items-center gap-2">
+                            {setIdx > 0 && !set.done && (
+                              <button
+                                type="button"
+                                onClick={() => copyFromPreviousSet(ex.id, setIdx)}
+                                className="text-[10px] font-mono font-bold text-zinc-500 hover:text-[#D4FF00] flex items-center gap-1 transition-colors py-1 px-1.5 rounded-lg active:scale-90"
+                                title="Repetir valores de la serie anterior"
+                              >
+                                <Copy size={11} /> Repetir
+                              </button>
+                            )}
 
-                      {/* Reps con Steppers compactos */}
-                      <div className="col-span-4 flex items-center justify-center gap-0.5">
-                        <button
-                          type="button"
-                          disabled={set.done}
-                          onClick={() => handleRepsStep(ex.id, set.id, -1)}
-                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
-                        >
-                          <Minus size={9} />
-                        </button>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          value={set.repsDone !== undefined ? set.repsDone : ''}
-                          placeholder={set.reps || '10'}
-                          disabled={set.done}
-                          onChange={e => updateSetInput(ex.id, set.id, 'repsDone', e.target.value)}
-                          className="w-10 h-7 bg-black/70 border border-white/[0.1] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
-                        />
-                        <button
-                          type="button"
-                          disabled={set.done}
-                          onClick={() => handleRepsStep(ex.id, set.id, 1)}
-                          className="w-5 h-7 rounded-lg bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
-                        >
-                          <Plus size={9} />
-                        </button>
-                      </div>
-
-                      {/* Check */}
-                      <div className="col-span-1 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => toggleSetDone(ex.id, set.id)}
-                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all active:scale-90 shrink-0 ${
-                            set.done
-                              ? 'bg-[#D4FF00] text-[#050507] shadow-[0_0_10px_rgba(212,255,0,0.6)]'
-                              : 'bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <Check size={12} strokeWidth={3.5} />
-                        </button>
-                      </div>
-
-                      {setIdx > 0 && !set.done && (
-                        <div className="col-span-12 flex justify-end pr-2 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => copyFromPreviousSet(ex.id, setIdx)}
-                            className="text-[9px] font-mono font-bold text-zinc-500 hover:text-[#D4FF00] flex items-center gap-1 transition-colors"
-                          >
-                            <Copy size={9} /> IGUAL A LA ANTERIOR
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleSetDone(ex.id, set.id)}
+                              className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-black uppercase tracking-wider transition-all active:scale-90 ${
+                                set.done
+                                  ? 'bg-[#D4FF00] text-[#050507] shadow-[0_0_12px_rgba(212,255,0,0.6)]'
+                                  : 'bg-white/[0.05] border border-white/[0.1] text-zinc-300 hover:text-white'
+                              }`}
+                            >
+                              <Check size={14} strokeWidth={3.5} />
+                              <span>{set.done ? 'Hecho' : 'Listo'}</span>
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+
+                        {/* Nivel 2: Bloques Anchos de Peso y Repeticiones (Nunca se enciman) */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* Bloque Peso */}
+                          <div className="bg-black/60 border border-white/[0.08] rounded-xl p-2 flex items-center justify-between">
+                            <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase pl-1">Peso (kg)</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={set.done}
+                                onClick={() => handleWeightStep(ex.id, set.id, -2.5)}
+                                className="w-7 h-8 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-300 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
+                              >
+                                <Minus size={12} strokeWidth={3} />
+                              </button>
+                              <input
+                                type="number"
+                                step="0.5"
+                                inputMode="decimal"
+                                value={set.weight ?? ''}
+                                disabled={set.done}
+                                onChange={e => updateSetInput(ex.id, set.id, 'weight', e.target.value)}
+                                placeholder="0"
+                                className="w-12 h-8 bg-black/80 border border-white/[0.12] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
+                              />
+                              <button
+                                type="button"
+                                disabled={set.done}
+                                onClick={() => handleWeightStep(ex.id, set.id, 2.5)}
+                                className="w-7 h-8 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-300 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
+                              >
+                                <Plus size={12} strokeWidth={3} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Bloque Repeticiones */}
+                          <div className="bg-black/60 border border-white/[0.08] rounded-xl p-2 flex items-center justify-between">
+                            <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase pl-1">Reps</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={set.done}
+                                onClick={() => handleRepsStep(ex.id, set.id, -1)}
+                                className="w-7 h-8 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-300 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
+                              >
+                                <Minus size={12} strokeWidth={3} />
+                              </button>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                value={set.repsDone !== undefined && set.repsDone !== null ? String(set.repsDone) : ''}
+                                placeholder={set.reps || '10'}
+                                disabled={set.done}
+                                onChange={e => updateSetInput(ex.id, set.id, 'repsDone', e.target.value)}
+                                className="w-12 h-8 bg-black/80 border border-white/[0.12] rounded-lg text-center text-xs text-white font-mono font-bold focus:border-[#D4FF00] outline-none disabled:opacity-50"
+                              />
+                              <button
+                                type="button"
+                                disabled={set.done}
+                                onClick={() => handleRepsStep(ex.id, set.id, 1)}
+                                className="w-7 h-8 rounded-lg bg-white/[0.05] border border-white/[0.08] text-zinc-300 hover:text-white flex items-center justify-center active:scale-90 disabled:opacity-20 transition-all shrink-0"
+                              >
+                                <Plus size={12} strokeWidth={3} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -748,15 +816,15 @@ export default function TrackerView({
         })}
       </div>
 
-      {/* Footer Fijo con cortina */}
+      {/* FOOTER FIJO */}
       <div 
-        className="fixed bottom-0 left-0 right-0 z-30 pt-8 pb-5 px-5 bg-gradient-to-t from-[#050507] via-[#050507]/95 to-transparent pointer-events-auto"
+        className="fixed bottom-0 left-0 right-0 z-30 pt-6 pb-5 px-5 bg-gradient-to-t from-[#050507] via-[#050507]/95 to-transparent pointer-events-auto"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 12px)' }}
       >
         <div className="max-w-md mx-auto">
           <button
             onClick={handleFinish}
-            className="w-full py-4 volt-button rounded-2xl flex items-center justify-center gap-2 shadow-[0_12px_35px_rgba(212,255,0,0.35)] active:scale-[0.98] transition-all"
+            className="w-full py-4 volt-button rounded-2xl flex items-center justify-center gap-2 shadow-[0_12px_35px_rgba(212,255,0,0.35)] active:scale-[0.98] transition-all font-black text-xs tracking-wider uppercase"
           >
             <Check size={18} strokeWidth={3.5} />
             FINALIZAR ENTRENAMIENTO
@@ -764,6 +832,7 @@ export default function TrackerView({
         </div>
       </div>
 
+      {/* MODAL CALCULADORA DE DISCOS */}
       {plateCalcTarget && (
         <PlateCalculatorModal
           initialWeight={plateCalcTarget.weight}
@@ -772,6 +841,7 @@ export default function TrackerView({
         />
       )}
 
+      {/* MODAL PIRÁMIDE DE CALENTAMIENTO */}
       {warmupTarget && (
         <WarmupModal
           workingWeight={warmupTarget.weight}
@@ -780,6 +850,7 @@ export default function TrackerView({
         />
       )}
 
+      {/* MODAL CONFIRMACIÓN DE SALIDA */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in">
           <div className="luxury-card p-6 max-w-sm w-full space-y-4">
@@ -813,6 +884,7 @@ export default function TrackerView({
         </div>
       )}
 
+      {/* MODAL DE TÉCNICA DEL EJERCICIO */}
       {detailExercise && (
         <ExerciseDetailModal
           exercise={detailExercise}

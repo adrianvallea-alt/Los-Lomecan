@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import {
   X, Save, Plus, Trash2, ChevronRight, ChevronLeft,
   Calendar, Dumbbell, Sparkles, ChevronDown, ChevronUp,
-  ArrowRight
+  ArrowRight, AlertCircle, Minus
 } from 'lucide-react';
 import { getCurrentMonth, getCurrentYear } from '../../utils/gymHelpers';
 import LibrarySelector from './LibrarySelector';
@@ -28,9 +28,23 @@ const triggerHaptic = (ms = 25) => {
 export default function RoutineCreator({ onSave, onCancel, initialData = null }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState(initialData?.name || '');
+  const [notification, setNotification] = useState(null);
+
   const [trainingDays, setTrainingDays] = useState(() => {
     if (initialData?.trainingDays && initialData.trainingDays.length > 0) {
-      return initialData.trainingDays;
+      return initialData.trainingDays.map(d => ({
+        ...d,
+        exercises: (d.exercises || []).map(ex => ({
+          ...ex,
+          sets: (ex.sets || []).map((s, idx) => ({
+            ...s,
+            id: s.id || `set_${Date.now()}_${idx}`,
+            setNum: s.setNum || idx + 1,
+            weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
+            reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10'
+          }))
+        }))
+      }));
     }
     return [{ name: 'Día 1: Empuje / Pecho', exercises: [] }];
   });
@@ -39,7 +53,12 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
   const [expandedExerciseId, setExpandedExerciseId] = useState(null);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
 
-  // Validar si puede avanzar de paso
+  const showToast = (msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 2500);
+  };
+
+  // Validar si puede avanzar
   const canGoNext = () => {
     if (step === 1) return name.trim().length > 0;
     if (step === 2) {
@@ -71,7 +90,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
 
   const removeTrainingDay = (indexToRemove) => {
     if (trainingDays.length <= 1) {
-      alert('Debes tener al menos 1 día de entrenamiento.');
+      showToast('⚠️ Debes tener al menos 1 día de entrenamiento');
       return;
     }
     triggerHaptic(40);
@@ -90,14 +109,14 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
     const repsValue = libraryExercise.default_reps || '10-12';
 
     const defaultSets = Array.from({ length: seriesCount }, (_, i) => ({
-      id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${i}`,
+      id: crypto.randomUUID ? crypto.randomUUID() : `set_${Date.now()}_${i}`,
       setNum: i + 1,
       weight: '',
       reps: repsValue,
     }));
 
     const newExercise = {
-      id: crypto.randomUUID ? crypto.randomUUID() : `ex_${Date.now()}`,
+      id: crypto.randomUUID ? crypto.randomUUID() : `ex_${Date.now()}_${Math.random()}`,
       name: libraryExercise.name,
       muscle: libraryExercise.muscle,
       secondaryMuscles: libraryExercise.secondary_muscles || '',
@@ -142,10 +161,10 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
             if (ex.id !== exerciseId) return ex;
             const lastSet = ex.sets[ex.sets.length - 1];
             const nextSet = {
-              id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${ex.sets.length}`,
+              id: crypto.randomUUID ? crypto.randomUUID() : `set_${Date.now()}_${ex.sets.length}`,
               setNum: ex.sets.length + 1,
-              weight: lastSet?.weight || '',
-              reps: lastSet?.reps || '10',
+              weight: lastSet?.weight ?? '',
+              reps: lastSet?.reps ?? '10',
             };
             return { ...ex, sets: [...ex.sets, nextSet] };
           })
@@ -183,7 +202,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
             if (ex.id !== exerciseId) return ex;
             return {
               ...ex,
-              sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: value } : s)
+              sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: String(value) } : s)
             };
           })
         };
@@ -201,10 +220,10 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           exercises: day.exercises.map(ex => {
             if (ex.id !== exerciseId) return ex;
             const newSets = preset.sets.map((targetReps, i) => ({
-              id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${i}`,
+              id: crypto.randomUUID ? crypto.randomUUID() : `set_${Date.now()}_${i}`,
               setNum: i + 1,
-              weight: ex.sets[i]?.weight || '',
-              reps: targetReps,
+              weight: ex.sets[i]?.weight ?? '',
+              reps: String(targetReps),
             }));
             return { ...ex, sets: newSets };
           })
@@ -213,7 +232,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
     );
   };
 
-  // ==================== GUARDAR ====================
+  // ==================== GUARDAR RUTINA ====================
   const handleSubmit = () => {
     if (!name.trim()) return;
 
@@ -236,8 +255,8 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           sets: ex.sets.map((s, sIdx) => ({
             id: s.id || `set_${sIdx + 1}`,
             setNum: sIdx + 1,
-            weight: s.weight?.toString() || '',
-            reps: (s.reps || '10').toString(),
+            weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
+            reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10',
           }))
         }))
       }))
@@ -257,13 +276,13 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
   // ==================== PASO 1: NOMBRE ====================
   const renderStep1 = () => (
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-4 space-y-6 text-center animate-fade-in max-w-sm mx-auto w-full">
-      <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.15)]">
-        <Calendar size={32} />
+      <div className="w-16 h-16 rounded-3xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.15)]">
+        <Calendar size={30} />
       </div>
 
       <div>
-        <h2 className="text-xl font-black text-white tracking-tight">Nombre del Plan de Entrenamiento</h2>
-        <p className="text-xs text-zinc-400 mt-1">Dale un título claro a esta rutina</p>
+        <h2 className="text-xl font-black text-white tracking-tight font-sans">Nombre del Plan</h2>
+        <p className="text-xs text-zinc-400 mt-1 font-sans">Asigna un título para tu rutina de entrenamiento</p>
       </div>
 
       <div className="w-full space-y-4">
@@ -277,8 +296,8 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
               nextStep();
             }
           }}
-          placeholder="Escribe el nombre aquí..."
-          className="w-full bg-[#0A0A0C] border border-white/[0.12] rounded-2xl p-4 text-center text-base font-bold text-white placeholder-zinc-600 focus:border-[#D4FF00] focus:shadow-[0_0_15px_rgba(212,255,0,0.2)] outline-none transition-all"
+          placeholder="Ej: Empuje / Tirón / Pierna"
+          className="w-full bg-black/60 border border-white/[0.12] rounded-2xl p-4 text-center text-sm font-bold text-white placeholder-zinc-600 focus:border-[#D4FF00] focus:shadow-[0_0_15px_rgba(212,255,0,0.2)] outline-none transition-all"
         />
 
         <div className="flex flex-wrap justify-center gap-1.5">
@@ -290,7 +309,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                 triggerHaptic(15);
                 setName(presetName);
               }}
-              className={`px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-full border text-[10px] font-mono font-bold transition-all ${
                 name === presetName
                   ? 'bg-[#D4FF00]/20 border-[#D4FF00] text-[#D4FF00]'
                   : 'bg-white/[0.03] border-white/[0.06] text-zinc-400 hover:text-white'
@@ -305,7 +324,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           type="button"
           disabled={!name.trim()}
           onClick={nextStep}
-          className="w-full py-4 mt-2 bg-[#D4FF00] text-[#09090B] font-black rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] hover:bg-[#e5ff1a]"
+          className="w-full py-4 mt-2 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)]"
         >
           Continuar a los Días <ArrowRight size={16} />
         </button>
@@ -317,9 +336,9 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
   const renderStep2 = () => (
     <div className="flex-1 flex flex-col min-h-0 animate-fade-in overflow-hidden">
       
-      {/* Pestañas de días (fijas arriba) */}
+      {/* Pestañas de días */}
       <div className="px-4 pt-3 pb-2 shrink-0 border-b border-white/[0.04] bg-[#09090B]">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 touch-pan-x">
           {trainingDays.map((day, idx) => (
             <button
               key={idx}
@@ -329,7 +348,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
               }}
               className={`px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 active:scale-95 ${
                 activeDayIndex === idx
-                  ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_12px_rgba(212,255,0,0.3)]'
+                  ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_12px_rgba(212,255,0,0.3)] font-black'
                   : 'bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white'
               }`}
             >
@@ -345,7 +364,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           <button
             onClick={addTrainingDay}
             className="px-3 py-2 rounded-2xl bg-white/[0.03] border border-dashed border-white/[0.15] text-[#D4FF00] text-xs font-bold hover:bg-[#D4FF00]/10 flex items-center gap-1 shrink-0 active:scale-95 transition-all"
-            title="Añadir otro día"
+            title="Añadir otro día de entrenamiento"
           >
             <Plus size={14} /> Día
           </button>
@@ -353,20 +372,20 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
       </div>
 
       {/* Cabecera del día activo */}
-      <div className="px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 bg-[#0A0A0C]">
+      <div className="px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 bg-[#0A0A0F] border-b border-white/[0.04]">
         <div className="flex-1">
           <input
-            value={currentDay?.name || ''}
+            value={currentDay?.name ?? ''}
             onChange={e => updateDayName(activeDayIndex, e.target.value)}
             placeholder="Nombre del día (ej. Pecho y Tríceps)"
-            className="w-full bg-transparent text-sm font-black text-white border-b border-transparent focus:border-[#D4FF00] outline-none py-1 transition-colors"
+            className="w-full bg-transparent text-xs font-black text-white border-b border-transparent focus:border-[#D4FF00] outline-none py-1 transition-colors uppercase font-mono"
           />
         </div>
 
         {trainingDays.length > 1 && (
           <button
             onClick={() => removeTrainingDay(activeDayIndex)}
-            className="p-1.5 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-white/[0.04] transition-colors"
+            className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-white/[0.04] transition-colors"
             title="Eliminar este día"
           >
             <Trash2 size={15} />
@@ -374,15 +393,15 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
         )}
       </div>
 
-      {/* Listado de ejercicios CON SCROLL INDEPENDIENTE */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 no-scrollbar touch-pan-y">
+      {/* Listado de ejercicios con scroll */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 no-scrollbar touch-pan-y pb-28">
         {currentDay?.exercises.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-500 gap-3 bg-white/[0.01] border border-white/[0.04] rounded-3xl p-6">
             <Dumbbell size={32} className="text-zinc-600" />
             <p className="text-xs font-medium text-zinc-400">Este día aún no tiene ejercicios</p>
             <button
               onClick={() => setShowLibraryModal(true)}
-              className="px-4 py-2.5 bg-[#D4FF00] text-[#09090B] rounded-xl text-xs font-bold uppercase tracking-wider shadow-md active:scale-95"
+              className="px-4 py-2.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider shadow-md active:scale-95"
             >
               + Añadir Ejercicio
             </button>
@@ -395,7 +414,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                 key={ex.id}
                 className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden transition-all"
               >
-                {/* Cabecera del ejercicio */}
+                {/* Encabezado del ejercicio */}
                 <div
                   onClick={() => setExpandedExerciseId(isExpanded ? null : ex.id)}
                   className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] active:scale-[0.99] transition-all"
@@ -405,8 +424,8 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                       <span className="text-[11px] font-mono font-bold text-zinc-500">#{exIdx + 1}</span>
                       <h4 className="text-xs font-bold text-white truncate">{ex.name}</h4>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-500">
-                      <span className="text-[#D4FF00]/80 font-medium">{ex.muscle || 'Músculo'}</span>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-500 font-mono">
+                      <span className="text-[#D4FF00] font-bold uppercase">{ex.muscle || 'MÚSCULO'}</span>
                       <span>·</span>
                       <span className="text-zinc-300 font-semibold">{ex.sets.length} series</span>
                       <span>({ex.sets.map(s => s.reps || '?').join(', ')})</span>
@@ -420,7 +439,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                         e.stopPropagation();
                         removeExercise(ex.id);
                       }}
-                      className="p-1.5 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-white/[0.04] transition-colors"
+                      className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-white/[0.04] transition-colors"
                       title="Quitar ejercicio"
                     >
                       <Trash2 size={14} />
@@ -429,13 +448,13 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                   </div>
                 </div>
 
-                {/* Editor detallado de series */}
+                {/* Editor de series expandido */}
                 {isExpanded && (
                   <div className="px-3.5 pb-4 pt-1 border-t border-white/[0.04] space-y-3 bg-black/30 animate-fade-in">
                     
                     {/* Presets rápidos */}
                     <div className="space-y-1">
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Presets rápidos:</span>
+                      <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-zinc-500">Presets rápidos:</span>
                       <div className="flex flex-wrap gap-1.5">
                         {PRESET_SCHEMES.map(scheme => (
                           <button
@@ -450,12 +469,12 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                       </div>
                     </div>
 
-                    {/* Tabla de series individuales */}
+                    {/* Tabla de series */}
                     <div className="space-y-2 pt-1">
-                      <div className="grid grid-cols-12 text-center text-[9px] font-bold text-zinc-500 uppercase tracking-wider px-1">
+                      <div className="grid grid-cols-12 text-center text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider px-1">
                         <div className="col-span-2">Serie</div>
-                        <div className="col-span-5">Reps Objetivo</div>
-                        <div className="col-span-4">Peso Sugerido</div>
+                        <div className="col-span-5">Reps Sugeridas</div>
+                        <div className="col-span-4">Peso (kg)</div>
                         <div className="col-span-1"></div>
                       </div>
 
@@ -471,10 +490,10 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                           <div className="col-span-5">
                             <input
                               type="text"
-                              value={set.reps}
+                              value={set.reps ?? ''}
                               onChange={e => updateSetDetail(ex.id, set.id, 'reps', e.target.value)}
                               placeholder="10-12"
-                              className="w-full bg-black/60 border border-white/[0.08] rounded-lg text-center text-xs font-bold text-white py-1.5 focus:border-[#D4FF00] outline-none"
+                              className="w-full bg-black/60 border border-white/[0.08] rounded-lg text-center text-xs font-mono font-bold text-white py-1.5 focus:border-[#D4FF00] outline-none"
                             />
                           </div>
 
@@ -482,10 +501,10 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                             <input
                               type="number"
                               step="0.5"
-                              value={set.weight}
+                              value={set.weight ?? ''}
                               onChange={e => updateSetDetail(ex.id, set.id, 'weight', e.target.value)}
                               placeholder="Opcional"
-                              className="w-full bg-black/60 border border-white/[0.08] rounded-lg text-center text-xs font-bold text-white py-1.5 focus:border-[#D4FF00] outline-none"
+                              className="w-full bg-black/60 border border-white/[0.08] rounded-lg text-center text-xs font-mono font-bold text-white py-1.5 focus:border-[#D4FF00] outline-none"
                             />
                           </div>
 
@@ -494,9 +513,9 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                               type="button"
                               disabled={ex.sets.length <= 1}
                               onClick={() => removeSetFromExercise(ex.id, set.id)}
-                              className="text-zinc-600 hover:text-red-400 disabled:opacity-20"
+                              className="text-zinc-600 hover:text-rose-400 disabled:opacity-20 p-1"
                             >
-                              <X size={12} />
+                              <X size={13} />
                             </button>
                           </div>
                         </div>
@@ -506,7 +525,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
                     <button
                       type="button"
                       onClick={() => addSetToExercise(ex.id)}
-                      className="w-full py-2 border border-dashed border-white/[0.08] rounded-xl text-[10px] font-bold text-zinc-400 hover:text-[#D4FF00] hover:border-[#D4FF00]/40 flex items-center justify-center gap-1.5 transition-colors"
+                      className="w-full py-2 border border-dashed border-white/[0.08] rounded-xl text-[10px] font-mono font-bold text-zinc-400 hover:text-[#D4FF00] hover:border-[#D4FF00]/40 flex items-center justify-center gap-1.5 transition-colors"
                     >
                       <Plus size={12} /> Añadir Serie a {ex.name}
                     </button>
@@ -519,7 +538,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
 
         <button
           onClick={() => setShowLibraryModal(true)}
-          className="w-full py-3.5 rounded-2xl border border-dashed border-[#D4FF00]/40 bg-[#D4FF00]/[0.03] text-[#D4FF00] text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-[#D4FF00]/10 active:scale-95 transition-all shadow-sm"
+          className="w-full py-3.5 rounded-2xl border border-dashed border-[#D4FF00]/40 bg-[#D4FF00]/[0.03] text-[#D4FF00] text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-[#D4FF00]/10 active:scale-95 transition-all shadow-sm font-mono"
         >
           <Plus size={15} /> Añadir Ejercicio a {currentDay?.name || 'este día'}
         </button>
@@ -530,48 +549,55 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
   // ==================== PASO 3: RESUMEN ====================
   const renderStep3 = () => (
     <div className="flex-1 flex flex-col items-center justify-center px-6 py-6 text-center space-y-6 animate-fade-in max-w-sm mx-auto w-full">
-      <div className="w-16 h-16 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.15)]">
-        <Sparkles size={32} />
+      <div className="w-16 h-16 rounded-3xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center text-[#D4FF00] shadow-[0_0_20px_rgba(212,255,0,0.15)]">
+        <Sparkles size={30} />
       </div>
 
       <div>
-        <h3 className="text-xl font-black text-white tracking-tight">¡Plan de Entrenamiento Listo!</h3>
-        <p className="text-xs text-zinc-400 mt-1">Revisa el resumen antes de guardar</p>
+        <h3 className="text-xl font-black text-white tracking-tight font-sans">¡Plan Listo para Guardar!</h3>
+        <p className="text-xs text-zinc-400 mt-1 font-sans">Revisa el resumen de tu rutina antes de asignarla</p>
       </div>
 
-      <div className="w-full bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4 text-left space-y-3 font-mono">
-        <div className="flex justify-between text-xs">
-          <span className="text-zinc-500">Nombre:</span>
+      <div className="w-full luxury-card p-5 text-left space-y-3 font-mono">
+        <div className="flex justify-between text-xs border-b border-white/[0.04] pb-2">
+          <span className="text-zinc-400">Nombre:</span>
           <span className="text-white font-bold truncate max-w-[180px]">{name}</span>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-zinc-500">Días de entreno:</span>
+        <div className="flex justify-between text-xs border-b border-white/[0.04] pb-2">
+          <span className="text-zinc-400">Días de entreno:</span>
           <span className="text-[#D4FF00] font-bold">{trainingDays.length} días</span>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-zinc-500">Total ejercicios:</span>
+        <div className="flex justify-between text-xs border-b border-white/[0.04] pb-2">
+          <span className="text-zinc-400">Total ejercicios:</span>
           <span className="text-white font-bold">{totalExercisesCount}</span>
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-zinc-500">Total series:</span>
+          <span className="text-zinc-400">Total series:</span>
           <span className="text-white font-bold">{totalSetsCount}</span>
         </div>
       </div>
 
       <button
         onClick={handleSubmit}
-        className="w-full py-4 bg-[#D4FF00] text-[#09090B] font-black rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,255,0,0.35)] hover:bg-[#e5ff1a] active:scale-[0.98] transition-all"
+        className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,255,0,0.35)] active:scale-[0.98] transition-all"
       >
         <Save size={16} /> Guardar y Asignar Rutina
       </button>
     </div>
   );
 
-  // Renderizado mediante React Portal directo en document.body para desacoplarlo del contenedor padre
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[200] bg-[#09090B] flex flex-col h-[100dvh] w-full select-none overflow-hidden animate-fade-in">
       
-      {/* Header superior fijo */}
+      {/* Toast Notification */}
+      {notification && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#0C0C12] border border-amber-400/40 text-amber-300 text-xs font-mono font-bold px-4 py-2 rounded-full shadow-[0_0_20px_rgba(251,191,36,0.3)] backdrop-blur-xl animate-fade-in flex items-center gap-1.5">
+          <AlertCircle size={14} />
+          {notification}
+        </div>
+      )}
+
+      {/* Header superior */}
       <div className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-white/[0.04] shrink-0 bg-[#09090B]">
         <button
           onClick={onCancel}
@@ -581,7 +607,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           <X size={18} />
         </button>
 
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+        <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-[#D4FF00]">
           Paso {step} de {TOTAL_STEPS}
         </span>
 
@@ -595,12 +621,12 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
         {step === 3 && renderStep3()}
       </div>
 
-      {/* Barra de navegación inferior SIEMPRE FIJA Y VISIBLE */}
+      {/* Barra de navegación inferior */}
       <div className="px-5 py-3.5 border-t border-white/[0.06] bg-[#0A0A0C] flex items-center justify-between shrink-0 safe-bottom">
         <button
           onClick={prevStep}
           disabled={step === 1}
-          className="px-4 py-2.5 rounded-xl border border-white/[0.08] text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-20 flex items-center gap-1 active:scale-95 transition-all"
+          className="px-4 py-2.5 rounded-xl border border-white/[0.08] text-xs font-mono font-bold text-zinc-400 hover:text-white disabled:opacity-20 flex items-center gap-1 active:scale-95 transition-all"
         >
           <ChevronLeft size={14} /> Anterior
         </button>
@@ -609,7 +635,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           <button
             onClick={nextStep}
             disabled={!canGoNext()}
-            className="px-5 py-2.5 bg-[#D4FF00] text-[#09090B] rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-30 flex items-center gap-1 shadow-[0_0_15px_rgba(212,255,0,0.3)] hover:bg-[#e5ff1a] active:scale-95 transition-all"
+            className="px-5 py-2.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-30 flex items-center gap-1 shadow-[0_0_15px_rgba(212,255,0,0.3)] active:scale-95 transition-all font-mono"
           >
             Siguiente <ChevronRight size={14} />
           </button>
