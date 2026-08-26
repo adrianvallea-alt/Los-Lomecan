@@ -1,17 +1,17 @@
 // src/components/EvolutionView.jsx
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, memo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  TrendingUp, Award, Weight, Dumbbell, 
-  Image as ImageIcon, Calculator, Zap, 
-  Flame, Activity, X, Camera
+  TrendingUp, Award, Weight, 
+  Calculator, Zap, 
+  Activity, X, Camera
 } from 'lucide-react';
 import useWeightLogs from '../hooks/useWeightLogs';
 import ProgressPhotos from './ProgressPhotos';
 
 export const calculate1RM = (weight, reps) => {
   const w = parseFloat(weight) || 0;
-  const r = parseInt(reps) || 0;
+  const r = parseInt(reps, 10) || 0;
   if (w <= 0 || r <= 0) return 0;
   if (r === 1) return w;
   const epley = w * (1 + r / 30);
@@ -21,11 +21,10 @@ export const calculate1RM = (weight, reps) => {
 
 const triggerHaptic = (ms = 20) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(ms); } catch (e) {}
+    try { navigator.vibrate(ms); } catch {}
   }
 };
 
-// Función de detección robusta con diccionario extendido
 const detectMuscleGroup = (muscleRaw = '', exerciseName = '') => {
   const normalize = (str) =>
     (str || '')
@@ -42,18 +41,14 @@ const detectMuscleGroup = (muscleRaw = '', exerciseName = '') => {
     combined.includes('banca') || combined.includes('apertura') || combined.includes('fondo') ||
     combined.includes('cruce') || combined.includes('inclinado') || combined.includes('declinado') ||
     combined.includes('peck deck') || combined.includes('pec deck')
-  ) {
-    return 'Pecho';
-  }
+  ) return 'Pecho';
   
   if (
     combined.includes('espalda') || combined.includes('dorsal') || combined.includes('trapecio') ||
     combined.includes('lumb') || combined.includes('remo') || combined.includes('jalon') ||
     combined.includes('dominada') || combined.includes('pulldown') || combined.includes('back') ||
     combined.includes('pull over') || combined.includes('pullover') || combined.includes('peso muerto')
-  ) {
-    return 'Espalda';
-  }
+  ) return 'Espalda';
 
   if (
     combined.includes('pierna') || combined.includes('cuadricep') || combined.includes('femoral') ||
@@ -62,49 +57,41 @@ const detectMuscleGroup = (muscleRaw = '', exerciseName = '') => {
     combined.includes('zancada') || combined.includes('leg extension') || combined.includes('curl femoral') ||
     combined.includes('hip thrust') || combined.includes('bulgara') || combined.includes('aduc') ||
     combined.includes('abduc') || combined.includes('squat') || combined.includes('hack')
-  ) {
-    return 'Pierna';
-  }
+  ) return 'Pierna';
 
   if (
     combined.includes('hombro') || combined.includes('deltoid') || combined.includes('militar') ||
     combined.includes('lateral') || combined.includes('pajaro') || combined.includes('shoulder') ||
     combined.includes('press arnold') || combined.includes('face pull') || combined.includes('facepull') ||
     combined.includes('frontal') || combined.includes('posterior')
-  ) {
-    return 'Hombro';
-  }
+  ) return 'Hombro';
 
   if (
     combined.includes('bicep') || combined.includes('tricep') || combined.includes('brazo') ||
     combined.includes('antebrazo') || combined.includes('curl') || combined.includes('frances') ||
     combined.includes('copa') || combined.includes('extension polea') || combined.includes('martillo') ||
     combined.includes('predicador') || combined.includes('pushdown') || combined.includes('fondos paralelas')
-  ) {
-    return 'Brazo';
-  }
+  ) return 'Brazo';
 
   if (
     combined.includes('abdom') || combined.includes('core') || combined.includes('crunch') ||
     combined.includes('plancha') || combined.includes('elevacion de piernas') || combined.includes('abs') ||
     combined.includes('oblicuo') || combined.includes('rueda')
-  ) {
-    return 'Abdomen';
-  }
+  ) return 'Abdomen';
 
   return null;
 };
 
-// Gráfica táctil con scroll vertical libre
-const InteractiveLineChart = ({ data, color, unit = '', height = 135 }) => {
+const InteractiveLineChart = memo(({ data, color, unit = '', height = 135 }) => {
   const [activeIndex, setActiveIndex] = useState(null);
   const svgRef = useRef(null);
 
-  if (!data || data.length === 0) return null;
-
-  const validData = data
-    .filter(item => typeof item.value === 'number' && !isNaN(item.value))
-    .map(item => ({ ...item, value: Math.max(0, item.value) }));
+  const validData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return data
+      .filter(item => typeof item.value === 'number' && !isNaN(item.value))
+      .map(item => ({ ...item, value: Math.max(0, item.value) }));
+  }, [data]);
 
   if (validData.length === 0) return null;
 
@@ -203,14 +190,16 @@ const InteractiveLineChart = ({ data, color, unit = '', height = 135 }) => {
           <text x={padding.left} y={height - 5} textAnchor="start" fill="#71717A" fontSize="8" fontWeight="700" fontFamily="monospace">
             {points[0]?.label}
           </text>
-          <text x={width - padding.right} y={height - 5} textAnchor="end" fill="#71717A" fontSize="8" fontWeight="700" fontFamily="monospace">
-            {points[points.length - 1]?.label}
-          </text>
+          {points.length > 1 && (
+            <text x={width - padding.right} y={height - 5} textAnchor="end" fill="#71717A" fontSize="8" fontWeight="700" fontFamily="monospace">
+              {points[points.length - 1]?.label}
+            </text>
+          )}
         </svg>
       </div>
     </div>
   );
-};
+});
 
 export default function EvolutionView({ activeProfile }) {
   const [activeTab, setActiveTab] = useState('metrics');
@@ -242,65 +231,64 @@ export default function EvolutionView({ activeProfile }) {
       .filter(item => typeof item.value === 'number' && !isNaN(item.value));
   }, [weightLogs]);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     if (!activeProfile?.id) return;
+    const allSessions = [];
+    const prefix = `workoutHistory_${activeProfile.id}_`;
 
-    const loadData = () => {
-      const allSessions = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(`workoutHistory_${activeProfile.id}_`)) {
-          try {
-            const sessions = JSON.parse(localStorage.getItem(key));
-            if (Array.isArray(sessions)) allSessions.push(...sessions);
-          } catch (e) {}
-        }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) {
+        try {
+          const sessions = JSON.parse(localStorage.getItem(key));
+          if (Array.isArray(sessions)) allSessions.push(...sessions);
+        } catch {}
       }
+    }
 
-      if (allSessions.length === 0) return;
+    if (allSessions.length === 0) return;
 
-      const exerciseRecords = {};
-      const muscleSets = { Pecho: 0, Espalda: 0, Pierna: 0, Hombro: 0, Brazo: 0, Abdomen: 0 };
-      const sevenDaysAgo = Date.now() - (7 * 86400000);
+    const exerciseRecords = {};
+    const muscleSets = { Pecho: 0, Espalda: 0, Pierna: 0, Hombro: 0, Brazo: 0, Abdomen: 0 };
+    const sevenDaysAgo = Date.now() - (7 * 86400000);
 
-      allSessions.forEach(session => {
-        const isRecent = new Date(session.date).getTime() >= sevenDaysAgo;
+    allSessions.forEach(session => {
+      const isRecent = new Date(session.date).getTime() >= sevenDaysAgo;
 
-        (session.exercises || []).forEach(ex => {
-          const exKey = ex.libraryExerciseId || ex.id || ex.name;
+      (session.exercises || []).forEach(ex => {
+        const exKey = ex.libraryExerciseId || ex.id || ex.name;
 
-          (ex.sets || []).forEach(set => {
-            const w = parseFloat(set.weight) || 0;
-            const r = parseInt(set.reps) || 0;
+        (ex.sets || []).forEach(set => {
+          const w = parseFloat(set.weight) || 0;
+          const r = parseInt(set.repsDone || set.reps, 10) || 0;
 
-            if (w > 0 && r > 0) {
-              const estimated1RM = calculate1RM(w, r);
-              if (!exerciseRecords[exKey] || estimated1RM > exerciseRecords[exKey].oneRepMax) {
-                exerciseRecords[exKey] = { name: ex.name, weight: w, reps: r, oneRepMax: estimated1RM };
-              }
+          if (w > 0 && r > 0) {
+            const estimated1RM = calculate1RM(w, r);
+            if (!exerciseRecords[exKey] || estimated1RM > exerciseRecords[exKey].oneRepMax) {
+              exerciseRecords[exKey] = { name: ex.name, weight: w, reps: r, oneRepMax: estimated1RM };
             }
+          }
 
-            if (isRecent && set.done) {
-              const detectedMuscle = detectMuscleGroup(ex.muscle, ex.name);
-              if (detectedMuscle && muscleSets[detectedMuscle] !== undefined) {
-                muscleSets[detectedMuscle] += 1;
-              }
+          if (isRecent && (set.done || set.done === undefined)) {
+            const detectedMuscle = detectMuscleGroup(ex.muscle, ex.name);
+            if (detectedMuscle && muscleSets[detectedMuscle] !== undefined) {
+              muscleSets[detectedMuscle] += 1;
             }
-          });
+          }
         });
       });
+    });
 
-      setMuscleDistribution(muscleSets);
-      const top = Object.values(exerciseRecords).sort((a, b) => b.oneRepMax - a.oneRepMax).slice(0, 8);
-      setTopExercises(top);
-    };
+    setMuscleDistribution(muscleSets);
+    const top = Object.values(exerciseRecords).sort((a, b) => b.oneRepMax - a.oneRepMax).slice(0, 8);
+    setTopExercises(top);
+  }, [activeProfile?.id]);
 
+  useEffect(() => {
     loadData();
-
-    // Actualización en tiempo real al finalizar un entrenamiento
     window.addEventListener('workoutFinished', loadData);
     return () => window.removeEventListener('workoutFinished', loadData);
-  }, [activeProfile?.id]);
+  }, [loadData]);
 
   const handleAddWeight = () => {
     const weight = parseFloat(weightInput);
@@ -313,7 +301,7 @@ export default function EvolutionView({ activeProfile }) {
 
   const calculated1RM = useMemo(() => {
     const w = parseFloat(calcWeight);
-    const r = parseInt(calcReps);
+    const r = parseInt(calcReps, 10);
     if (!w || !r || w <= 0 || r <= 0) return null;
     const max = calculate1RM(w, r);
     return {
@@ -356,7 +344,7 @@ export default function EvolutionView({ activeProfile }) {
             }}
             className={`flex-1 py-2 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'metrics'
-                ? 'bg-[#D4FF00] text-[#09090B] shadow-md'
+                ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black'
                 : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -370,7 +358,7 @@ export default function EvolutionView({ activeProfile }) {
             }}
             className={`flex-1 py-2 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'photos'
-                ? 'bg-[#D4FF00] text-[#09090B] shadow-md'
+                ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black'
                 : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -379,13 +367,11 @@ export default function EvolutionView({ activeProfile }) {
         </div>
       </div>
 
-      {/* PESTAÑA: FOTOS DE PROGRESO */}
       {activeTab === 'photos' ? (
         <div className="flex-1 flex flex-col min-h-0">
           <ProgressPhotos activeProfile={activeProfile} onBack={() => setActiveTab('metrics')} />
         </div>
       ) : (
-        /* PESTAÑA: MÉTRICAS */
         <div className="flex-1 flex flex-col min-h-0 space-y-4">
           
           {/* Gráfica de Peso Corporal */}
@@ -427,7 +413,7 @@ export default function EvolutionView({ activeProfile }) {
             </div>
           </div>
 
-          {/* MATRIZ: ZONAS DE VOLUMEN CIENTÍFICAS */}
+          {/* Zonas de Volumen */}
           <div className="px-5 shrink-0">
             <div className="luxury-card p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -472,7 +458,7 @@ export default function EvolutionView({ activeProfile }) {
             </div>
           </div>
 
-          {/* Récords Personales (1RM) */}
+          {/* Récords Personales */}
           <div className="px-5 space-y-3 pb-8">
             <div className="luxury-card p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -510,7 +496,7 @@ export default function EvolutionView({ activeProfile }) {
         </div>
       )}
 
-      {/* MODAL CALCULADORA DE 1RM */}
+      {/* Modal Calculadora 1RM */}
       {showInteractiveCalc && ReactDOM.createPortal(
         <div 
           className="fixed inset-0 z-[140] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none"

@@ -1,6 +1,6 @@
 // src/components/gym/ExerciseForm.jsx
 import React, { useRef, useState } from 'react';
-import { Film, Link, Check, Dumbbell } from 'lucide-react';
+import { Film, Link, Check } from 'lucide-react';
 
 const PRIMARY_MUSCLES = [
   { id: 'Pecho', label: 'Pecho', desc: 'Pectoral mayor, superior' },
@@ -14,7 +14,6 @@ const PRIMARY_MUSCLES = [
 export default function ExerciseForm({ initial, onSave, onCancel, uploading, uploadProgress }) {
   const [name, setName] = useState(initial?.name || '');
   
-  // Normalizar el músculo inicial si ya existía
   const [muscle, setMuscle] = useState(() => {
     if (!initial?.muscle) return 'Pecho';
     const found = PRIMARY_MUSCLES.find(m => m.id.toLowerCase() === initial.muscle.toLowerCase());
@@ -44,7 +43,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
   const fileRef = useRef();
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       setVideoFile(file);
       setVideoPreview(URL.createObjectURL(file));
@@ -62,6 +61,7 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
   };
 
   const getYouTubeId = (url) => {
+    if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
@@ -76,11 +76,11 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
     const exerciseData = {
       id: initial?.id,
       name: name.trim(),
-      muscle: muscle, // Se guarda exactamente como 'Pecho', 'Espalda', etc.
+      muscle: muscle,
       secondaryMuscles: secondaryMuscles.trim(),
       description: description.trim(),
       video_url: videoMode === 'link' ? videoUrl : (initial?.video_url || ''),
-      defaultSeries: parseInt(defaultSeries) || 3,
+      defaultSeries: parseInt(defaultSeries, 10) || 3,
       defaultReps: defaultReps.trim() || '10-12',
     };
 
@@ -92,7 +92,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
       onSubmit={handleSubmit}
       className="bg-white/[0.02] border border-white/[0.06] backdrop-blur-xl rounded-[2rem] p-5 space-y-4 mb-4 animate-scale-in select-none"
     >
-      {/* Nombre del ejercicio */}
       <div>
         <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
           Nombre del Ejercicio *
@@ -108,7 +107,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         />
       </div>
 
-      {/* 🎯 SELECTOR DE MÚSCULO PRIMARIO (PILLS TÁCTILES) */}
       <div>
         <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
           Músculo Primario Objetivo *
@@ -142,7 +140,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         </div>
       </div>
 
-      {/* Músculos Secundarios / Subgrupo Opcional */}
       <div>
         <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
           Músculos Secundarios / Sub-zona (Opcional)
@@ -156,7 +153,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         />
       </div>
 
-      {/* Descripción / Técnica */}
       <div>
         <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
           Técnica de Ejecución / Notas (Paso a paso)
@@ -171,7 +167,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         />
       </div>
 
-      {/* Selector de modo de video */}
       <div>
         <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
           Demostración en Video (Opcional)
@@ -204,12 +199,11 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         </div>
       </div>
 
-      {/* Modo subir archivo */}
       {videoMode === 'upload' && (
         <div className="space-y-3 bg-black/40 border border-white/[0.06] p-3 rounded-2xl">
           <button
             type="button"
-            onClick={() => fileRef.current.click()}
+            onClick={() => fileRef.current?.click()}
             className="w-full py-3 border border-dashed border-white/[0.1] rounded-xl text-xs font-mono font-bold text-zinc-300 hover:border-[#D4FF00] hover:text-[#D4FF00] transition-colors flex items-center justify-center gap-2"
           >
             <Film size={15} />
@@ -230,7 +224,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         </div>
       )}
 
-      {/* Modo enlace YouTube */}
       {videoMode === 'link' && (
         <div className="space-y-2 bg-black/40 border border-white/[0.06] p-3 rounded-2xl">
           <input
@@ -253,7 +246,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         </div>
       )}
 
-      {/* Series y Reps sugeridas por defecto */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block mb-1">
@@ -282,7 +274,6 @@ export default function ExerciseForm({ initial, onSave, onCancel, uploading, upl
         </div>
       </div>
 
-      {/* Botones de acción */}
       <div className="flex gap-3 justify-end pt-2">
         <button
           type="button"

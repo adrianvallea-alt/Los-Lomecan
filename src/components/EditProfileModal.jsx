@@ -1,8 +1,8 @@
 // src/components/EditProfileModal.jsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import {
-  X, Camera, User, Weight, Heart, Bell, RefreshCw, Sparkles, Smile, Loader2, Check,
-  Calendar, Ruler, Activity, Target, Flame
+  X, Camera, User, Weight, Heart, Bell, RefreshCw, Sparkles, Smile, Loader2, Check
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
@@ -24,7 +24,6 @@ const DICEBEAR_STYLES = [
 
 const ROLES = ['Coach', 'Athlete', 'Atleta Pro', 'Fitness Partner', 'Principiante'];
 
-// 100% Alineados con OnboardingWizard
 const ACTIVITY_LEVELS = [
   { value: 'sedentary', label: 'Sedentario', sub: 'Poco o nada de ejercicio (trabajo de escritorio)' },
   { value: 'light', label: 'Ligero', sub: 'Ejercicio 1 a 3 días por semana' },
@@ -50,7 +49,7 @@ const calculateBMR = (weight, height, age, gender) => {
   if (!weight || !height || !age) return 0;
   const w = parseFloat(weight);
   const h = parseFloat(height);
-  const a = parseInt(age);
+  const a = parseInt(age, 10);
   return gender === 'female'
     ? Math.round((10 * w) + (6.25 * h) - (5 * a) - 161)
     : Math.round((10 * w) + (6.25 * h) - (5 * a) + 5);
@@ -130,6 +129,14 @@ const compressImage = (file, maxWidth = 300, maxHeight = 300, quality = 0.85) =>
   });
 };
 
+const blobToBase64 = (blob) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+};
+
 const getColorKey = (c) => c.id || c.name;
 const getDefaultColor = () => COLORS[0] ? getColorKey(COLORS[0]) : 'lime';
 
@@ -159,12 +166,12 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
   const [dicebearSeed, setDicebearSeed] = useState(profile?.name || 'Adrian');
 
   const buildSeedUrl = (style, seed) => {
-    const cleanSeed = encodeURIComponent(seed.trim() || 'Adrian');
+    const cleanSeed = encodeURIComponent((seed || '').trim() || 'Adrian');
     return `https://api.dicebear.com/9.x/${style}/svg?seed=${cleanSeed}`;
   };
 
   const [avatar, setAvatar] = useState(() => {
-    if (profile?.avatar && profile.avatar.startsWith('http')) {
+    if (profile?.avatar && (profile.avatar.startsWith('http') || profile.avatar.startsWith('data:'))) {
       return profile.avatar;
     }
     return buildSeedUrl(dicebearStyle, dicebearSeed);
@@ -172,7 +179,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(() => {
-    if (profile?.avatar && profile.avatar.startsWith('http')) {
+    if (profile?.avatar && (profile.avatar.startsWith('http') || profile.avatar.startsWith('data:'))) {
       return profile.avatar;
     }
     return buildSeedUrl(dicebearStyle, dicebearSeed);
@@ -189,7 +196,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
 
   const [healthConditions, setHealthConditions] = useState(profile?.health_conditions || []);
   const { reminders, updateReminders } = useReminders(profile?.id);
-  const fileRef = useRef();
+  const fileRef = useRef(null);
 
   const handleStyleChange = (newStyle) => {
     setDicebearStyle(newStyle);
@@ -243,11 +250,18 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
         const { error: uploadError } = await supabase.storage
           .from('profile-pictures')
           .upload(fileName, compressed, { cacheControl: '3600', upsert: false });
+        
         if (uploadError) throw uploadError;
         const { data: urlData } = supabase.storage.from('profile-pictures').getPublicUrl(fileName);
         finalAvatar = urlData.publicUrl;
       } catch (err) {
-        finalAvatar = imagePreview;
+        // Fallback robusto a Base64 si no hay conexión para que la foto persista offline
+        try {
+          const compressed = await compressImage(imageFile);
+          finalAvatar = await blobToBase64(compressed);
+        } catch {
+          finalAvatar = imagePreview;
+        }
       }
     }
 
@@ -255,13 +269,13 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
     let waterGoal = profile?.water_goal || 2000;
 
     if (weight && height && age) {
-      const bmr = calculateBMR(parseFloat(weight), parseFloat(height), parseInt(age), gender);
-      const tdee = calculateTDEE(bmr, activityLevel);
-      newGoals = calculateMacroGoals(tdee, parseFloat(weight), goalType, healthConditions);
+      const bmrVal = calculateBMR(parseFloat(weight), parseFloat(height), parseInt(age, 10), gender);
+      const tdeeVal = calculateTDEE(bmrVal, activityLevel);
+      newGoals = calculateMacroGoals(tdeeVal, parseFloat(weight), goalType, healthConditions);
       waterGoal = calculateWaterGoal(parseFloat(weight), activityLevel);
     }
 
-    const generatedId = profile?.id || name.toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
+    const generatedId = profile?.id || name.toLowerCase().replace(/[^a-z0-9_]/g, '') || `user_${Date.now()}`;
 
     const updatedProfile = {
       ...profile,
@@ -273,7 +287,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
       avatar: finalAvatar,
       weight: parseFloat(weight) || null,
       height: parseFloat(height) || null,
-      age: parseInt(age) || null,
+      age: parseInt(age, 10) || null,
       gender,
       activity_level: activityLevel,
       goal_type: goalType,
@@ -288,12 +302,12 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
     toast.success('Atleta actualizado');
   };
 
-  const bmr = calculateBMR(parseFloat(weight) || 0, parseFloat(height) || 0, parseInt(age) || 0, gender);
+  const bmr = calculateBMR(parseFloat(weight) || 0, parseFloat(height) || 0, parseInt(age, 10) || 0, gender);
   const tdee = bmr ? calculateTDEE(bmr, activityLevel) : null;
   const suggestedGoals = bmr ? calculateMacroGoals(tdee, parseFloat(weight) || 70, goalType, healthConditions) : null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-[#09090B]/95 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 select-none animate-fade-in">
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-[150] bg-[#09090B]/95 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 select-none animate-fade-in">
       <div className="w-full sm:max-w-md bg-[#0A0A0C] border border-white/[0.08] sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col max-h-[92vh] shadow-2xl shadow-black/80 overflow-hidden animate-slide-up">
         
         {/* Cabecera */}
@@ -304,7 +318,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
             </h2>
             <p className="text-[10px] text-zinc-400 font-mono">Calibración Biométrica y Preferencias</p>
           </div>
-          <button onClick={onCancel} className="p-2 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white">
+          <button onClick={onCancel} className="p-2 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white" aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
@@ -336,11 +350,8 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
         {/* Contenido del Formulario */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
           
-          {/* PESTAÑA 1: PERFIL & AVATAR */}
           {tab === 'profile' && (
             <div className="space-y-4 animate-fade-in">
-              
-              {/* Preview Central */}
               <div className="flex flex-col items-center gap-2.5">
                 <div className="relative w-28 h-28 rounded-full bg-[#050507] border-2 border-[#D4FF00] flex items-center justify-center overflow-hidden shadow-[0_0_25px_rgba(212,255,0,0.25)]">
                   {imageLoading && (
@@ -351,7 +362,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
 
                   {avatarMode === 'emoji' ? (
                     <span className="text-5xl">{avatar}</span>
-                  ) : (avatar?.startsWith('http') || imagePreview) ? (
+                  ) : (avatar?.startsWith('http') || avatar?.startsWith('data:') || imagePreview) ? (
                     <img 
                       key={imagePreview || avatar}
                       src={imagePreview || avatar} 
@@ -365,7 +376,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                   )}
                 </div>
 
-                {/* Selector de Modo */}
                 <div className="flex bg-white/[0.04] p-1 rounded-xl border border-white/[0.06] text-xs font-mono">
                   <button
                     type="button"
@@ -405,7 +415,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               </div>
 
-              {/* Generador de Ilustración */}
               {avatarMode === 'dicebear' && (
                 <div className="bg-black/60 border border-white/[0.08] p-4 rounded-2xl space-y-3 animate-fade-in">
                   <div>
@@ -420,7 +429,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                           onClick={() => handleStyleChange(st.id)}
                           className={`p-2 rounded-xl text-[10px] font-mono font-bold text-left truncate transition-all ${
                             dicebearStyle === st.id
-                              ? 'bg-[#D4FF00] text-[#09090B] shadow-md'
+                              ? 'bg-[#D4FF00] text-[#09090B] shadow-md font-black'
                               : 'bg-white/[0.03] text-zinc-400 border border-white/[0.06] hover:text-white'
                           }`}
                         >
@@ -455,7 +464,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               )}
 
-              {/* Modo Emoji */}
               {avatarMode === 'emoji' && (
                 <div className="flex flex-wrap gap-2 p-3 bg-black/40 rounded-2xl border border-white/[0.05] justify-center animate-fade-in">
                   {EMOJIS.map(em => (
@@ -475,7 +483,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
 
               <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
-              {/* Color de Identidad */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Color de Identidad</label>
                 <div className="flex gap-2 flex-wrap justify-center bg-black/40 p-2.5 rounded-2xl border border-white/[0.05]">
@@ -499,7 +506,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               </div>
 
-              {/* Nombre y Rol */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Nombre Completo</label>
                 <input
@@ -545,11 +551,8 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
             </div>
           )}
 
-          {/* PESTAÑA 2: BIOMETRÍA (100% IDÉNTICO A ONBOARDINGWIZARD) */}
           {tab === 'body' && (
             <div className="space-y-4 animate-fade-in">
-              
-              {/* Sexo Biológico */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Sexo Biológico</label>
                 <div className="flex gap-2">
@@ -558,7 +561,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                     onClick={() => setGender('male')}
                     className={`flex-1 py-3 rounded-xl border text-xs font-bold transition-all ${
                       gender === 'male'
-                        ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-md'
+                        ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-md font-black'
                         : 'border-white/[0.08] text-zinc-400'
                     }`}
                   >
@@ -569,7 +572,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                     onClick={() => setGender('female')}
                     className={`flex-1 py-3 rounded-xl border text-xs font-bold transition-all ${
                       gender === 'female'
-                        ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-md'
+                        ? 'border-[#D4FF00]/50 bg-[#D4FF00]/10 text-white shadow-md font-black'
                         : 'border-white/[0.08] text-zinc-400'
                     }`}
                   >
@@ -578,7 +581,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               </div>
 
-              {/* Edad, Peso y Altura */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Edad (años)</label>
@@ -617,7 +619,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               </div>
 
-              {/* Nivel de Actividad (PAL) */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Nivel de Actividad (PAL)</label>
                 <div className="space-y-1.5">
@@ -639,7 +640,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               </div>
 
-              {/* Objetivo Metabólico */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1.5">Objetivo Metabólico</label>
                 <div className="space-y-1.5">
@@ -664,7 +664,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
               </div>
 
-              {/* Resumen Calculado en Vivo */}
               {bmr > 0 && (
                 <div className="bg-black/60 border border-white/[0.08] rounded-2xl p-4 space-y-2.5 font-mono text-xs">
                   <span className="text-[#D4FF00] font-bold block text-[10px] uppercase tracking-wider">
@@ -683,7 +682,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
             </div>
           )}
 
-          {/* PESTAÑA 3: SALUD */}
           {tab === 'health' && (
             <div className="space-y-3.5 animate-fade-in">
               <p className="text-xs text-zinc-400 font-mono">Condiciones médicas y metabólicas para ajustar macros:</p>
@@ -707,7 +705,6 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
             </div>
           )}
 
-          {/* PESTAÑA 4: ALARMAS */}
           {tab === 'reminders' && (
             <div className="space-y-3 animate-fade-in">
               <div className="flex items-center justify-between bg-white/[0.02] border border-white/[0.06] rounded-2xl p-4">
@@ -717,18 +714,21 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => updateReminders({ ...reminders, water: { ...reminders.water, enabled: !reminders.water.enabled } })}
-                  className={`w-11 h-6 rounded-full transition-colors relative ${reminders.water.enabled ? 'bg-[#D4FF00]' : 'bg-zinc-800'}`}
+                  onClick={() => updateReminders({ ...reminders, water: { ...reminders.water, enabled: !reminders.water?.enabled } })}
+                  className={`w-11 h-6 rounded-full transition-colors relative ${reminders?.water?.enabled ? 'bg-[#D4FF00]' : 'bg-zinc-800'}`}
                 >
-                  <span className={`w-5 h-5 rounded-full bg-white absolute top-0.5 left-0.5 transition-transform ${reminders.water.enabled ? 'translate-x-5' : ''}`} />
+                  <span className={`w-5 h-5 rounded-full bg-white absolute top-0.5 left-0.5 transition-transform ${reminders?.water?.enabled ? 'translate-x-5' : ''}`} />
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer con Guardado */}
-        <div className="p-5 border-t border-white/[0.06] bg-[#0A0A0C] shrink-0">
+        {/* Footer */}
+        <div 
+          className="p-5 border-t border-white/[0.06] bg-[#0A0A0C] shrink-0"
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           <button
             type="button"
             onClick={handleSave}
@@ -745,6 +745,7 @@ export default function EditProfileModal({ profile, onSave, onCancel }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

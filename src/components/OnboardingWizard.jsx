@@ -2,22 +2,16 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronLeft, Check, Calendar, Ruler, Activity, Target, Sparkles, User, X } from 'lucide-react';
 
-// =========================================================================
-// FÓRMULAS CIENTÍFICAS DE GRADO CLÍNICO Y DEPORTIVO
-// =========================================================================
-
-// 1. TMB - Mifflin-St Jeor (1990)
 const calculateBMR = (weight, height, age, gender) => {
   if (!weight || !height || !age) return 0;
-  const w = parseFloat(weight);
-  const h = parseFloat(height);
-  const a = parseInt(age);
+  const w = parseFloat(String(weight).replace(',', '.'));
+  const h = parseFloat(String(height).replace(',', '.'));
+  const a = parseInt(age, 10);
   return gender === 'female'
     ? Math.round((10 * w) + (6.25 * h) - (5 * a) - 161)
     : Math.round((10 * w) + (6.25 * h) - (5 * a) + 5);
 };
 
-// 2. Factores PAL (FAO/OMS)
 const getActivityFactor = (level) => {
   const factors = {
     sedentary: 1.2,
@@ -29,14 +23,11 @@ const getActivityFactor = (level) => {
   return factors[level] || 1.55;
 };
 
-// 3. TDEE
 const calculateTDEE = (bmr, activityLevel) => Math.round(bmr * getActivityFactor(activityLevel));
 
-// 4. Objetivos de Macronutrientes (ISSN / Helms et al. 2014)
 const calculateGoals = (tdee, weight, goalType) => {
-  const w = parseFloat(weight) || 70;
+  const w = parseFloat(String(weight).replace(',', '.')) || 70;
 
-  // Ajuste Calórico (Déficit moderado 20% / Superávit limpio 10%)
   let targetCalories = tdee;
   if (goalType === 'lose') {
     const deficit = Math.min(Math.max(tdee * 0.20, 300), 750);
@@ -46,18 +37,15 @@ const calculateGoals = (tdee, weight, goalType) => {
     targetCalories = tdee + surplus;
   }
 
-  // Proteína (Morton et al. 2018 / Helms et al. 2014)
   let proteinPerKg = 1.8;
   if (goalType === 'lose') proteinPerKg = 2.2;
   else if (goalType === 'gain') proteinPerKg = 2.0;
 
   const protein = Math.round(proteinPerKg * w);
 
-  // Grasas esenciales (ISSN / ACSM: 0.6 a 0.8 g/kg)
   let fatPerKg = goalType === 'lose' ? 0.6 : 0.8;
   const fat = Math.round(Math.max(fatPerKg * w, 0.5 * w));
 
-  // Carbohidratos glucolíticos restantes
   const proteinCalories = protein * 4;
   const fatCalories = fat * 9;
   const carbCalories = Math.max(targetCalories - proteinCalories - fatCalories, 0);
@@ -71,9 +59,8 @@ const calculateGoals = (tdee, weight, goalType) => {
   };
 };
 
-// 5. Hidratación (EFSA/ACSM: 35 ml/kg + compensación por actividad)
 const calculateWaterGoal = (weight, activityLevel) => {
-  const w = parseFloat(weight) || 70;
+  const w = parseFloat(String(weight).replace(',', '.')) || 70;
   let baseWater = w * 35;
 
   if (activityLevel === 'active' || activityLevel === 'very_active') {
@@ -115,9 +102,9 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
   };
 
   const handleFinish = () => {
-    const w = parseFloat(weight) || 70;
-    const h = parseFloat(height) || 170;
-    const a = parseInt(age) || 25;
+    const w = parseFloat(String(weight).replace(',', '.')) || 70;
+    const h = parseFloat(String(height).replace(',', '.')) || 170;
+    const a = parseInt(age, 10) || 25;
 
     const bmr = calculateBMR(w, h, a, gender);
     const tdee = calculateTDEE(bmr, activityLevel);
@@ -138,22 +125,6 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
     });
   };
 
-  const handleSkip = () => {
-    onComplete({
-      name: name.trim() || 'Atleta',
-      weight: 70,
-      height: 170,
-      age: 28,
-      gender: 'male',
-      activity_level: 'moderate',
-      goal_type: 'maintain',
-      goals: { cal: 2450, pro: 140, carb: 260, fat: 60 },
-      water_goal: 2800,
-      auto_calculate_macros: true,
-    });
-  };
-
-  // PASO 0: NOMBRE
   const renderStep0 = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -178,7 +149,6 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
     </div>
   );
 
-  // PASO 1: SEXO Y EDAD
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -228,7 +198,6 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
     </div>
   );
 
-  // PASO 2: ANTROPOMETRÍA
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -266,7 +235,6 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
     </div>
   );
 
-  // PASO 3: ACTIVIDAD
   const renderStep3 = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -303,7 +271,6 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
     </div>
   );
 
-  // PASO 4: OBJETIVO
   const renderStep4 = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -353,9 +320,13 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
   };
 
   return (
-    <div className="min-h-screen bg-[#09090B] flex flex-col justify-center px-5 safe-top safe-bottom relative overflow-hidden select-none">
-      
-      {/* Botón de Cancelar / Cerrar Superior */}
+    <div 
+      className="min-h-[100dvh] bg-[#09090B] flex flex-col justify-center px-5 relative overflow-y-auto no-scrollbar select-none"
+      style={{
+        paddingTop: 'calc(1.5rem + env(safe-area-inset-top, 0px))',
+        paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))'
+      }}
+    >
       {onCancel && (
         <button
           type="button"
@@ -368,11 +339,7 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
         </button>
       )}
 
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-[#D4FF00]/[0.03] rounded-full blur-[120px]" />
-      </div>
-
-      <div className="w-full max-w-md mx-auto text-center relative z-10">
+      <div className="w-full max-w-md mx-auto text-center relative z-10 py-4">
         <div className="mb-6">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-3xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 shadow-[0_0_25px_rgba(212,255,0,0.2)] mb-2.5 text-[#D4FF00]">
             <Sparkles size={24} />
@@ -410,7 +377,7 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
             <button
               type="button"
               onClick={prevStep}
-              className="flex-1 py-3.5 border border-white/[0.1] rounded-2xl text-zinc-400 text-xs font-bold flex items-center justify-center gap-1 hover:bg-white/[0.05] hover:text-white transition-all font-mono uppercase"
+              className="flex-1 py-3.5 border border-white/[0.1] rounded-2xl text-zinc-400 text-xs font-bold flex items-center justify-center gap-1 hover:bg-white/[0.05] hover:text-white transition-all font-mono uppercase active:scale-95"
             >
               <ChevronLeft size={16} /> Atrás
             </button>
@@ -423,7 +390,7 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
               (step === 1 && !age) ||
               (step === 2 && (!weight || !height))
             }
-            className="flex-1 py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-30 transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] font-mono"
+            className="flex-1 py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-30 transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] font-mono active:scale-95"
           >
             {step === totalSteps - 1 ? (
               <>
@@ -437,12 +404,11 @@ export default function OnboardingWizard({ initialName = '', onComplete, onCance
           </button>
         </div>
 
-        {/* Botón de Cancelar Inferior */}
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="mt-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-rose-400 transition-colors block mx-auto"
+            className="mt-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-rose-400 transition-colors block mx-auto py-2"
           >
             ✕ Cancelar y volver
           </button>

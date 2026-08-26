@@ -1,7 +1,8 @@
+// src/components/ShareAchievementModal.jsx
 import React, { useRef, useEffect, useState } from 'react';
 import { X, Download, Share2 } from 'lucide-react';
 
-export default function ShareAchievementModal({ profile, achievements, currentStreak, longestStreak, onClose }) {
+export default function ShareAchievementModal({ profile, achievements = [], currentStreak = 0, longestStreak = 0, onClose }) {
   const canvasRef = useRef(null);
   const [imageUrl, setImageUrl] = useState(null);
   const [isGenerating, setIsGenerating] = useState(true);
@@ -22,12 +23,12 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    // Borde decorativo usando tu verde característico
+    // Borde decorativo
     ctx.strokeStyle = 'rgba(212, 255, 0, 0.3)';
     ctx.lineWidth = 2;
     ctx.strokeRect(12, 12, width - 24, height - 24);
 
-    // Título Principal
+    // Título
     ctx.fillStyle = '#d4ff00';
     ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
@@ -38,13 +39,13 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
     ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
     ctx.fillText(profile?.name || 'Atleta', width / 2, 90);
 
-    // Avatar (emoji)
+    // Avatar
     if (profile?.avatar) {
       ctx.font = '42px system-ui, -apple-system, sans-serif';
       ctx.fillText(profile.avatar.startsWith('http') ? '😎' : profile.avatar, width / 2, 140);
     }
 
-    // Rachas (con fondo sutil para dar estilo de tarjeta)
+    // Rachas
     ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
     ctx.fillRect(40, 165, width - 80, 55);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
@@ -56,7 +57,7 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
     ctx.fillText(`🏆 Mejor racha: ${longestStreak} días`, width / 2, 208);
 
     // Logros
-    if (achievements && achievements.length > 0) {
+    if (achievements.length > 0) {
       ctx.fillStyle = '#d4ff00';
       ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
       ctx.fillText('LOGROS DESBLOQUEADOS', width / 2, 255);
@@ -65,17 +66,16 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
       ctx.font = '13px system-ui, -apple-system, sans-serif';
       let yPos = 285;
       achievements.slice(0, 5).forEach(ach => {
-        ctx.fillText(`${ach.icon}  ${ach.name}`, width / 2, yPos);
+        ctx.fillText(`${ach.icon || '🏅'}  ${ach.name}`, width / 2, yPos);
         yPos += 26;
       });
     }
 
-    // Pie de imagen
+    // Pie
     ctx.fillStyle = '#71717a';
     ctx.font = '10px monospace';
     ctx.fillText('ENTRENA CON LOMECAN', width / 2, height - 32);
 
-    // Convertir a URL de objeto y manejar la limpieza de memoria anterior
     let currentUrl = null;
     canvas.toBlob((blob) => {
       if (blob) {
@@ -85,11 +85,8 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
       setIsGenerating(false);
     }, 'image/png');
 
-    // Retorno de limpieza (Evita fugas de memoria al re-generar)
     return () => {
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl);
-      }
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
     };
   }, [profile, achievements, currentStreak, longestStreak]);
 
@@ -113,18 +110,16 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
           files: [file],
         });
       } catch (err) {
-        console.log('Compartir cancelado o no soportado');
+        console.log('Compartir cancelado');
       }
     } else {
-      // Fallback a descarga si la API de compartir no está disponible
       handleDownload();
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#18181b] border border-white/10 rounded-[2.5rem] p-6 max-w-sm w-full shadow-2xl relative overflow-hidden">
-        {/* Destellos de fondo estilizados */}
+    <div className="fixed inset-0 z-[160] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none">
+      <div className="bg-[#18181b] border border-white/10 rounded-[2.5rem] p-6 max-w-sm w-full shadow-2xl relative overflow-hidden animate-scale-in">
         <div className="absolute -top-10 -right-10 w-24 h-24 bg-[#d4ff00]/10 rounded-full blur-2xl pointer-events-none" />
         
         <div className="flex justify-between items-center mb-5 relative z-10">
@@ -132,6 +127,7 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
           <button 
             onClick={onClose} 
             className="text-zinc-500 hover:text-white p-1.5 bg-zinc-900 rounded-full border border-white/5 transition-colors"
+            aria-label="Cerrar"
           >
             <X size={16} />
           </button>
@@ -141,7 +137,7 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
           <canvas ref={canvasRef} className="hidden" />
           {isGenerating ? (
             <div className="w-64 h-80 bg-zinc-900/60 rounded-2xl flex items-center justify-center text-zinc-500 text-xs font-mono tracking-widest uppercase">
-              Generando...
+              Generando credencial...
             </div>
           ) : imageUrl ? (
             <img 
@@ -152,11 +148,11 @@ export default function ShareAchievementModal({ profile, achievements, currentSt
           ) : null}
         </div>
 
-        <div className="flex gap-3 relative z-10">
+        <div className="flex gap-3 relative z-10 font-mono">
           <button
             onClick={handleDownload}
             disabled={!imageUrl}
-            className="flex-1 py-3 bg-zinc-900 border border-white/10 rounded-xl text-zinc-300 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:text-white hover:border-white/20 active:scale-[0.97] transition-all disabled:opacity-40"
+            className="flex-1 py-3 bg-zinc-900 border border-white/10 rounded-xl text-zinc-300 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:text-white active:scale-[0.97] transition-all disabled:opacity-40"
           >
             <Download size={14} />
             Descargar

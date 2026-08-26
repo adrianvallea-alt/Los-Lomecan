@@ -1,8 +1,8 @@
 // src/components/Dashboard.jsx
-import React, { useMemo, useState, useEffect, memo } from 'react';
+import React, { useMemo, useState, useEffect, memo, useCallback } from 'react';
 import { 
-  Play, Sun, Scale, Share2, Droplets, Waves, 
-  Utensils, Trash2, Zap, Trophy, Copy, X, Plus, Sparkles
+  Play, Sun, Scale, Share2, Waves, 
+  Utensils, Trash2, Zap, Trophy, Copy, X
 } from 'lucide-react';
 import useAchievements from '../hooks/useAchievements';
 import MealSuggestions from './MealSuggestions';
@@ -10,39 +10,48 @@ import ShareAchievementModal from './ShareAchievementModal';
 
 const triggerHaptic = (pattern = 25) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(pattern); } catch (e) {}
+    try { navigator.vibrate(pattern); } catch {}
   }
 };
 
-// Componente Compacto de Hidratación (Telemetría Horizontal Ergonómica)
 const WaterTracker = memo(({ waterGoal, profileId }) => {
-  const storageKey = `water_${profileId}_${new Date().toDateString()}`;
+  const getTodayDateString = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  };
+
+  const storageKey = `water_${profileId}_${getTodayDateString()}`;
   const [waterCurrent, setWaterCurrent] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? parseInt(saved, 10) : 0;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem(storageKey, waterCurrent.toString());
+    try {
+      localStorage.setItem(storageKey, waterCurrent.toString());
+    } catch {}
   }, [waterCurrent, storageKey]);
 
   const targetGoal = waterGoal || 2000;
   const waterPercent = Math.min(Math.round((waterCurrent / targetGoal) * 100), 100);
 
-  const addWater = (ml) => {
+  const addWater = useCallback((ml) => {
     triggerHaptic(20);
     setWaterCurrent((prev) => Math.min(prev + ml, targetGoal * 2));
-  };
+  }, [targetGoal]);
 
-  const removeWater = (ml) => {
+  const removeWater = useCallback((ml) => {
     triggerHaptic(20);
     setWaterCurrent((prev) => Math.max(prev - ml, 0));
-  };
+  }, []);
 
   return (
     <div className="relative z-10 mb-4 shrink-0">
       <div className="luxury-card p-4 flex flex-col gap-3">
-        {/* Cabecera del Tracker */}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-[#00F5FF]/10 text-[#00F5FF]">
@@ -57,7 +66,6 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
           </span>
         </div>
 
-        {/* Barra de Progreso Líquida */}
         <div className="space-y-1.5">
           <div className="flex justify-between items-center text-[10px] font-mono">
             <span className="text-zinc-400 font-bold">Progreso:</span>
@@ -71,7 +79,6 @@ const WaterTracker = memo(({ waterGoal, profileId }) => {
           </div>
         </div>
 
-        {/* Botones de Registro Rápido */}
         <div className="grid grid-cols-4 gap-2 pt-1">
           <button
             onClick={() => removeWater(250)}
@@ -117,10 +124,9 @@ const MEAL_CATEGORIES = [
 
 export default function Dashboard({
   profile,
-  dailyIntake,
+  dailyIntake = [],
   currentRoutine,
   onStartWorkout,
-  onGoToRoutines,
   onGoToEvolution,
   onAddFood,
   onDeleteFood,
@@ -137,28 +143,30 @@ export default function Dashboard({
   const [quickFat, setQuickFat] = useState('');
   const [quickCategory, setQuickCategory] = useState('comida');
 
-  const today = new Date().toDateString();
-  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  const todayStr = new Date().toDateString();
+  const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
 
   const todayItems = useMemo(() => {
-    return (dailyIntake || []).filter(
-      (entry) => new Date(entry.timestamp).toDateString() === today
-    );
-  }, [dailyIntake, today]);
+    return dailyIntake.filter((entry) => {
+      if (!entry?.timestamp) return false;
+      return new Date(entry.timestamp).toDateString() === todayStr;
+    });
+  }, [dailyIntake, todayStr]);
 
   const yesterdayItems = useMemo(() => {
-    return (dailyIntake || []).filter(
-      (entry) => new Date(entry.timestamp).toDateString() === yesterday
-    );
-  }, [dailyIntake, yesterday]);
+    return dailyIntake.filter((entry) => {
+      if (!entry?.timestamp) return false;
+      return new Date(entry.timestamp).toDateString() === yesterdayStr;
+    });
+  }, [dailyIntake, yesterdayStr]);
 
   const todayTotals = useMemo(() => {
     return todayItems.reduce(
       (acc, item) => {
-        acc.cal += item.macros?.cal || 0;
-        acc.pro += item.macros?.pro || 0;
-        acc.carb += item.macros?.carb || 0;
-        acc.fat += item.macros?.fat || 0;
+        acc.cal += Number(item.macros?.cal) || 0;
+        acc.pro += Number(item.macros?.pro) || 0;
+        acc.carb += Number(item.macros?.carb) || 0;
+        acc.fat += Number(item.macros?.fat) || 0;
         return acc;
       },
       { cal: 0, pro: 0, carb: 0, fat: 0 }
@@ -200,12 +208,12 @@ export default function Dashboard({
     return groups;
   }, [todayItems]);
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     setNotificationMsg(msg);
     setTimeout(() => setNotificationMsg(null), 2500);
-  };
+  }, []);
 
-  const handleCopyYesterday = (catId) => {
+  const handleCopyYesterday = useCallback((catId) => {
     triggerHaptic(35);
     const itemsToCopy = yesterdayItems.filter(item => {
       const hour = new Date(item.timestamp).getHours();
@@ -224,22 +232,26 @@ export default function Dashboard({
       return;
     }
 
+    // Corrección de escala matemática exacta de macros
     itemsToCopy.forEach(item => {
+      const grams = item.grams || 100;
+      const factor = 100 / grams;
+
       onAddFood({
         name: item.foodName,
-        cal: Math.round(((item.macros?.cal || 0) * 100) / (item.grams || 100)),
-        pro: item.macros?.pro || 0,
-        carb: item.macros?.carb || 0,
-        fat: item.macros?.fat || 0,
+        cal: Math.round((item.macros?.cal || 0) * factor),
+        pro: parseFloat(((item.macros?.pro || 0) * factor).toFixed(1)),
+        carb: parseFloat(((item.macros?.carb || 0) * factor).toFixed(1)),
+        fat: parseFloat(((item.macros?.fat || 0) * factor).toFixed(1)),
         base_g: 100,
         mealType: catId
-      }, item.grams || 100);
+      }, grams);
     });
 
     showToast(`✅ ${itemsToCopy.length} alimentos copiados de ayer`);
-  };
+  }, [yesterdayItems, onAddFood, showToast]);
 
-  const handleSaveQuickEntry = () => {
+  const handleSaveQuickEntry = useCallback(() => {
     if (!quickName.trim() || !quickCal) return;
     triggerHaptic(30);
 
@@ -261,12 +273,11 @@ export default function Dashboard({
     setQuickFat('');
     setShowQuickAddModal(false);
     showToast('✅ Calorías registradas');
-  };
+  }, [quickName, quickCal, quickPro, quickCarb, quickFat, quickCategory, onAddFood, showToast]);
 
   return (
     <div className="flex flex-col px-5 pt-2 pb-44 text-white bg-transparent select-none relative no-scrollbar">
       
-      {/* Toast Notification flotante */}
       {notificationMsg && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[#0C0C12] border border-[#D4FF00]/40 text-[#D4FF00] text-xs font-mono font-bold px-4 py-2 rounded-full shadow-[0_0_20px_rgba(212,255,0,0.3)] backdrop-blur-xl animate-fade-in">
           {notificationMsg}
@@ -302,7 +313,7 @@ export default function Dashboard({
         </button>
       </div>
 
-      {/* Botón Acción de Entrenamiento Inmediato */}
+      {/* Botón Acción de Entrenamiento */}
       <div className="mb-4 shrink-0">
         <button
           onClick={onStartWorkout}
@@ -313,11 +324,9 @@ export default function Dashboard({
         </button>
       </div>
 
-      {/* Cockpit de Calorías & Macronutrientes Unificado */}
+      {/* Cockpit de Calorías & Macronutrientes */}
       <div className="relative z-10 mb-4 shrink-0">
         <div className="luxury-card p-5 space-y-4">
-          
-          {/* Calorías Restantes */}
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
             <div>
               <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-zinc-400 uppercase block">
@@ -334,50 +343,45 @@ export default function Dashboard({
             </div>
           </div>
 
-          {/* Barras de Macronutrientes */}
           <div className="space-y-2.5 font-mono text-xs">
-            {/* Proteína */}
             <div>
               <div className="flex justify-between mb-1 text-[11px]">
                 <span className="font-bold text-blue-400">Proteína</span>
                 <span className="text-zinc-400">{todayData.pro.current} / <strong className="text-white">{todayData.pro.max}g</strong></span>
               </div>
               <div className="h-2 bg-black/60 rounded-full overflow-hidden border border-white/[0.04]">
-                <div className="h-full bg-blue-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(96,165,250,0.5)]" style={{ width: `${Math.min((todayData.pro.current/todayData.pro.max)*100, 100)}%` }} />
+                <div className="h-full bg-blue-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(96,165,250,0.5)]" style={{ width: `${Math.min((todayData.pro.current/Math.max(todayData.pro.max, 1))*100, 100)}%` }} />
               </div>
             </div>
 
-            {/* Carbohidratos */}
             <div>
               <div className="flex justify-between mb-1 text-[11px]">
                 <span className="font-bold text-purple-400">Carbohidratos</span>
                 <span className="text-zinc-400">{todayData.carb.current} / <strong className="text-white">{todayData.carb.max}g</strong></span>
               </div>
               <div className="h-2 bg-black/60 rounded-full overflow-hidden border border-white/[0.04]">
-                <div className="h-full bg-purple-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(192,132,252,0.5)]" style={{ width: `${Math.min((todayData.carb.current/todayData.carb.max)*100, 100)}%` }} />
+                <div className="h-full bg-purple-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(192,132,252,0.5)]" style={{ width: `${Math.min((todayData.carb.current/Math.max(todayData.carb.max, 1))*100, 100)}%` }} />
               </div>
             </div>
 
-            {/* Grasas */}
             <div>
               <div className="flex justify-between mb-1 text-[11px]">
                 <span className="font-bold text-amber-400">Grasas</span>
                 <span className="text-zinc-400">{todayData.fat.current} / <strong className="text-white">{todayData.fat.max}g</strong></span>
               </div>
               <div className="h-2 bg-black/60 rounded-full overflow-hidden border border-white/[0.04]">
-                <div className="h-full bg-amber-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]" style={{ width: `${Math.min((todayData.fat.current/todayData.fat.max)*100, 100)}%` }} />
+                <div className="h-full bg-amber-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(251,191,36,0.5)]" style={{ width: `${Math.min((todayData.fat.current/Math.max(todayData.fat.max, 1))*100, 100)}%` }} />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Sugerencias de comidas contextuales */}
       <div className="mb-4 shrink-0">
         <MealSuggestions remainingMacros={remainingMacros} goals={goals} onAddFood={onAddFood} />
       </div>
 
-      {/* Desglose de Comidas por Tiempo */}
+      {/* Desglose de Comidas */}
       <div className="space-y-3 mb-4 shrink-0">
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-zinc-400 flex items-center gap-1.5">
@@ -394,8 +398,8 @@ export default function Dashboard({
 
         {MEAL_CATEGORIES.map(cat => {
           const items = groupedMeals[cat.id] || [];
-          const catCalories = items.reduce((sum, i) => sum + (i.macros?.cal || 0), 0);
-          const catProtein = items.reduce((sum, i) => sum + (i.macros?.pro || 0), 0);
+          const catCalories = Math.round(items.reduce((sum, i) => sum + (Number(i.macros?.cal) || 0), 0));
+          const catProtein = items.reduce((sum, i) => sum + (Number(i.macros?.pro) || 0), 0);
 
           return (
             <div key={cat.id} className="luxury-card p-4 space-y-3">
@@ -443,13 +447,10 @@ export default function Dashboard({
         })}
       </div>
 
-      {/* Tracker de Agua Compacto */}
       <WaterTracker waterGoal={profile?.water_goal || 2000} profileId={profile?.id} />
 
-      {/* Leaderboard del Club */}
       <ClubLeaderboard currentProfileId={profile?.id} />
 
-      {/* Botón Evolución */}
       <div className="pt-2 shrink-0">
         <button
           onClick={onGoToEvolution}
@@ -460,7 +461,6 @@ export default function Dashboard({
         </button>
       </div>
 
-      {/* Modal Entrada Rápida de Macros */}
       {showQuickAddModal && (
         <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
           <div className="luxury-card p-6 max-w-sm w-full space-y-4 animate-scale-in">
@@ -494,6 +494,7 @@ export default function Dashboard({
 
                 <input
                   type="number"
+                  inputMode="numeric"
                   placeholder="Calorías (kcal) *"
                   value={quickCal}
                   onChange={e => setQuickCal(e.target.value)}
@@ -504,6 +505,7 @@ export default function Dashboard({
               <div className="grid grid-cols-3 gap-2">
                 <input
                   type="number"
+                  inputMode="decimal"
                   placeholder="Proteína (g)"
                   value={quickPro}
                   onChange={e => setQuickPro(e.target.value)}
@@ -511,6 +513,7 @@ export default function Dashboard({
                 />
                 <input
                   type="number"
+                  inputMode="decimal"
                   placeholder="Carbos (g)"
                   value={quickCarb}
                   onChange={e => setQuickCarb(e.target.value)}
@@ -518,6 +521,7 @@ export default function Dashboard({
                 />
                 <input
                   type="number"
+                  inputMode="decimal"
                   placeholder="Grasas (g)"
                   value={quickFat}
                   onChange={e => setQuickFat(e.target.value)}
@@ -537,7 +541,6 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Modal Compartir Logros */}
       {showShareModal && (
         <ShareAchievementModal
           profile={profile}
@@ -551,49 +554,57 @@ export default function Dashboard({
   );
 }
 
-// Leaderboard del Club Lomecan
-function ClubLeaderboard({ currentProfileId }) {
+const ClubLeaderboard = memo(function ClubLeaderboard({ currentProfileId }) {
   const [ranking, setRanking] = useState([]);
 
-  useEffect(() => {
-    const profiles = JSON.parse(localStorage.getItem('userProfiles') || '[]');
-    if (profiles.length === 0) return;
+  const computeScores = useCallback(() => {
+    try {
+      const profiles = JSON.parse(localStorage.getItem('userProfiles') || '[]');
+      if (!Array.isArray(profiles) || profiles.length === 0) return;
 
-    const scores = profiles.map(p => {
-      let totalVolume = 0;
-      let sessionsCount = 0;
+      const scores = profiles.map(p => {
+        let totalVolume = 0;
+        let sessionsCount = 0;
+        const prefix = `workoutHistory_${p.id}_`;
 
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(`workoutHistory_${p.id}_`)) {
-          try {
-            const sessions = JSON.parse(localStorage.getItem(key));
-            if (Array.isArray(sessions)) {
-              sessionsCount += sessions.length;
-              sessions.forEach(s => {
-                (s.exercises || []).forEach(ex => {
-                  (ex.sets || []).forEach(set => {
-                    totalVolume += (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0);
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith(prefix)) {
+            try {
+              const sessions = JSON.parse(localStorage.getItem(key));
+              if (Array.isArray(sessions)) {
+                sessionsCount += sessions.length;
+                sessions.forEach(s => {
+                  (s.exercises || []).forEach(ex => {
+                    (ex.sets || []).forEach(set => {
+                      totalVolume += (parseFloat(set.weight) || 0) * (parseInt(set.repsDone || set.reps, 10) || 0);
+                    });
                   });
                 });
-              });
-            }
-          } catch (e) {}
+              }
+            } catch {}
+          }
         }
-      }
 
-      return {
-        id: p.id,
-        name: p.name,
-        avatar: p.avatar || '😎',
-        volume: Math.round(totalVolume),
-        sessions: sessionsCount,
-      };
-    });
+        return {
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar || '😎',
+          volume: Math.round(totalVolume),
+          sessions: sessionsCount,
+        };
+      });
 
-    scores.sort((a, b) => b.volume - a.volume);
-    setRanking(scores);
+      scores.sort((a, b) => b.volume - a.volume);
+      setRanking(scores);
+    } catch {}
   }, []);
+
+  useEffect(() => {
+    computeScores();
+    window.addEventListener('workoutFinished', computeScores);
+    return () => window.removeEventListener('workoutFinished', computeScores);
+  }, [computeScores]);
 
   if (ranking.length <= 1) return null;
 
@@ -641,4 +652,4 @@ function ClubLeaderboard({ currentProfileId }) {
       </div>
     </div>
   );
-}
+});

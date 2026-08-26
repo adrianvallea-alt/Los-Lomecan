@@ -1,5 +1,7 @@
+// src/components/InstallPrompt.jsx
 import React, { useState, useEffect } from 'react';
 import { Download, X } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -7,6 +9,11 @@ export default function InstallPrompt() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    // Si ya estamos dentro de la app nativa de Capacitor (Android/iOS), NO mostrar nunca
+    if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+      return;
+    }
+
     const isStandalone = 
       window.matchMedia('(display-mode: standalone)').matches || 
       window.navigator.standalone === true;
@@ -15,13 +22,13 @@ export default function InstallPrompt() {
 
     const isDismissed = localStorage.getItem('lomecan_install_dismissed') === 'true';
 
-    // 1. Si el evento ya fue capturado en index.html, lo usamos de inmediato
+    // 1. Si el evento ya fue capturado en index.html
     if (window.deferredPrompt) {
       setDeferredPrompt(window.deferredPrompt);
       if (!isDismissed) setIsVisible(true);
     }
 
-    // 2. Por si acaso el evento se dispara después de montar el componente
+    // 2. Evento nativo del navegador
     const nativeHandler = (e) => {
       e.preventDefault();
       window.deferredPrompt = e;
@@ -29,7 +36,6 @@ export default function InstallPrompt() {
       if (!isDismissed) setIsVisible(true);
     };
 
-    // 3. Escuchamos nuestro evento personalizado por si index.html lo captura un milisegundo después
     const customHandler = () => {
       if (window.deferredPrompt) {
         setDeferredPrompt(window.deferredPrompt);
@@ -40,7 +46,7 @@ export default function InstallPrompt() {
     window.addEventListener('beforeinstallprompt', nativeHandler);
     window.addEventListener('lomecan-prompt-ready', customHandler);
 
-    // Para iOS: Mostrar banner automáticamente tras 4s si no está descartado
+    // Para iOS Safari
     const iosTimeout = setTimeout(() => {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
       if (isIOS && !isStandalone && !isDismissed) {
@@ -56,7 +62,6 @@ export default function InstallPrompt() {
   }, []);
 
   const handleInstall = async () => {
-    // Usamos el estado de React o la variable global de respaldo
     const promptToUse = deferredPrompt || window.deferredPrompt;
 
     if (promptToUse) {
@@ -69,7 +74,6 @@ export default function InstallPrompt() {
       setDeferredPrompt(null);
       window.deferredPrompt = null;
     } else {
-      // Si de verdad no hay evento (como en iOS), abrimos instrucciones
       setShowInstructions(true);
     }
   };
@@ -83,22 +87,25 @@ export default function InstallPrompt() {
 
   return (
     <>
-      {/* Banner flotante */}
-      <div className="fixed bottom-6 left-4 right-4 z-50 bg-[#0A0A0C] border border-white/[0.08] p-4 rounded-2xl flex items-center justify-between gap-3 shadow-2xl backdrop-blur-md animate-fade-in">
+      {/* Banner flotante ubicado arriba del BottomNav */}
+      <div 
+        className="fixed left-4 right-4 z-40 bg-[#0A0A0C]/95 border border-white/[0.12] p-4 rounded-[1.75rem] flex items-center justify-between gap-3 shadow-[0_15px_35px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-fade-in max-w-md mx-auto"
+        style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-[#D4FF00]/10 rounded-xl text-[#D4FF00]">
+          <div className="p-2.5 bg-[#D4FF00]/10 border border-[#D4FF00]/25 rounded-2xl text-[#D4FF00] shadow-[0_0_12px_rgba(212,255,0,0.2)]">
             <Download size={18} />
           </div>
           <div>
-            <h4 className="text-white font-semibold text-xs leading-none">Instalar Lomecan</h4>
-            <p className="text-zinc-400 text-[10px] mt-1 leading-none">Accede al instante desde tu inicio.</p>
+            <h4 className="text-white font-bold text-xs leading-none">Instalar Lomecan</h4>
+            <p className="text-zinc-400 text-[10px] mt-1 leading-none font-mono">Accede al instante desde tu inicio.</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleInstall}
-            className="bg-[#D4FF00] text-[#09090B] text-xs font-bold px-3.5 py-2 rounded-xl active:scale-95 transition-all whitespace-nowrap"
+            className="bg-[#D4FF00] text-[#09090B] text-xs font-black uppercase tracking-wider px-3.5 py-2 rounded-xl active:scale-95 transition-all whitespace-nowrap shadow-md font-mono"
           >
             {(deferredPrompt || window.deferredPrompt) ? 'Instalar' : '¿Cómo?'}
           </button>
@@ -106,6 +113,7 @@ export default function InstallPrompt() {
           <button 
             onClick={handleDismiss}
             className="p-1.5 text-zinc-500 hover:text-white rounded-lg transition-colors"
+            aria-label="Descartar"
           >
             <X size={16} />
           </button>
@@ -114,17 +122,17 @@ export default function InstallPrompt() {
 
       {/* Modal de instrucciones */}
       {showInstructions && (
-        <div className="fixed inset-0 z-[200] bg-[#09090B]/90 backdrop-blur-xl flex items-center justify-center p-6">
-          <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-white font-semibold text-sm mb-4">Cómo instalar Lomecan</h3>
-            <ol className="text-zinc-400 text-xs space-y-3 list-decimal list-inside">
+        <div className="fixed inset-0 z-[200] bg-[#09090B]/90 backdrop-blur-xl flex items-center justify-center p-6 animate-fade-in">
+          <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-[2rem] p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+            <h3 className="text-white font-bold text-sm mb-4 font-sans">Cómo instalar Lomecan</h3>
+            <ol className="text-zinc-400 text-xs space-y-3 list-decimal list-inside font-sans leading-relaxed">
               <li>Abre el menú del navegador (toca los <span className="text-white font-bold">⋮</span> o el icono de compartir <span className="text-white font-bold">⎋</span>).</li>
-              <li>Toca <strong className="text-white">"Agregar a pantalla de inicio"</strong> (o "Instalar aplicación").</li>
-              <li>Confirma la acción. ¡La app se añadirá a tu menú nativo!</li>
+              <li>Toca <strong className="text-[#D4FF00]">"Agregar a pantalla de inicio"</strong> (o "Instalar aplicación").</li>
+              <li>Confirma la acción para tener acceso directo como app nativa.</li>
             </ol>
             <button
               onClick={() => setShowInstructions(false)}
-              className="mt-6 w-full py-3 bg-[#D4FF00] text-[#09090B] font-bold rounded-xl text-xs active:scale-95 transition-all"
+              className="mt-6 w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all font-mono"
             >
               Entendido
             </button>

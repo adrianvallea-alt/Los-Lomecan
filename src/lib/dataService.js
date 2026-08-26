@@ -1,8 +1,7 @@
 // src/lib/dataService.js
 import { supabase } from './supabaseClient';
 
-// Helper con Timeout para que nunca se congele en datos móviles
-const fetchWithTimeout = async (promise, timeoutMs = 2500) => {
+const fetchWithTimeout = async (promise, timeoutMs = 3000) => {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -11,7 +10,6 @@ const fetchWithTimeout = async (promise, timeoutMs = 2500) => {
   ]);
 };
 
-// ==================== HELPER DE CACHÉ OFFLINE-FIRST ====================
 const cacheOrFetch = async (key, fetcher) => {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     const cached = localStorage.getItem(key);
@@ -19,7 +17,7 @@ const cacheOrFetch = async (key, fetcher) => {
   }
 
   try {
-    const data = await fetchWithTimeout(fetcher(), 2500);
+    const data = await fetchWithTimeout(fetcher(), 3000);
     if (data !== null && data !== undefined) {
       localStorage.setItem(key, JSON.stringify(data));
     }
@@ -29,13 +27,12 @@ const cacheOrFetch = async (key, fetcher) => {
     if (cached) {
       try {
         return JSON.parse(cached);
-      } catch (e) {}
+      } catch {}
     }
     return null;
   }
 };
 
-// ==================== HELPER DE FORMATEO ====================
 function formatRoutineData(r) {
   let trainingDays = [];
 
@@ -85,7 +82,6 @@ export async function fetchProfiles() {
     console.warn('Usando perfiles locales:', e);
   }
 
-  // Fusión inteligente para nunca perder perfiles creados localmente
   const mergedMap = new Map();
   remoteProfiles.forEach(p => mergedMap.set(p.id, p));
   localSaved.forEach(p => mergedMap.set(p.id, { ...mergedMap.get(p.id), ...p }));
@@ -103,7 +99,6 @@ export async function fetchProfiles() {
 export async function updateProfile(profile) {
   if (!profile || !profile.id) return;
 
-  // 1. Guardar de inmediato en todas las memorias locales para persistencia garantizada
   const currentProfiles = JSON.parse(localStorage.getItem('userProfiles') || localStorage.getItem('profilesCache') || '[]');
   const exists = currentProfiles.some(p => p.id === profile.id);
   const updatedList = exists
@@ -113,17 +108,14 @@ export async function updateProfile(profile) {
   localStorage.setItem('userProfiles', JSON.stringify(updatedList));
   localStorage.setItem('profilesCache', JSON.stringify(updatedList));
 
-  // 2. Sincronizar en la nube si hay conexión
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .upsert(profile, { onConflict: 'id' });
-    if (error) console.warn('Aviso Supabase perfil:', error);
-  } catch (err) {
-    console.warn('Error de red al sincronizar perfil:', err);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
   }
+
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(profile, { onConflict: 'id' });
+  if (error) throw error;
 }
 
 export async function deleteProfile(profileId) {
@@ -132,16 +124,15 @@ export async function deleteProfile(profileId) {
   localStorage.setItem('userProfiles', JSON.stringify(updatedList));
   localStorage.setItem('profilesCache', JSON.stringify(updatedList));
 
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', profileId);
-    if (error) console.warn('Aviso Supabase delete:', error);
-  } catch (err) {
-    console.warn('Error de red al borrar perfil:', err);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
   }
+
+  const { error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', profileId);
+  if (error) throw error;
 }
 
 // ==================== RUTINAS ====================
@@ -175,9 +166,11 @@ export async function fetchAllGlobalRoutines() {
 }
 
 export async function saveUserRoutine(profileId, routine) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-  const isGlobal = routine.is_global ?? (routine.parent_routine_id ? false : true);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
 
+  const isGlobal = routine.is_global ?? (!routine.parent_routine_id);
   const routineData = {
     id: routine.id,
     name: routine.name,
@@ -198,7 +191,10 @@ export async function saveUserRoutine(profileId, routine) {
 }
 
 export async function importRoutineToProfile(profileId, globalRoutineId) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
+
   const { data: globalRoutine, error: fetchError } = await supabase
     .from('routines')
     .select('*')
@@ -206,7 +202,7 @@ export async function importRoutineToProfile(profileId, globalRoutineId) {
     .single();
   if (fetchError) throw fetchError;
 
-  const newId = crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`;
+  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `rot_${Date.now()}`;
   const localRoutine = {
     id: newId,
     name: globalRoutine.name,
@@ -226,7 +222,10 @@ export async function importRoutineToProfile(profileId, globalRoutineId) {
 }
 
 export async function deleteUserRoutine(profileId, routineId, isGlobal = false) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
+
   let query = supabase
     .from('routines')
     .update({ deleted_at: new Date().toISOString() })
@@ -282,6 +281,7 @@ export async function fetchWorkoutHistory(profileId, routineId) {
             reps: set.reps,
             done: Boolean(set.done)
           });
+          acc[set.exercise_name].sets.sort((a, b) => (a.setNum || 0) - (b.setNum || 0));
           return acc;
         }, {})
       )
@@ -291,7 +291,9 @@ export async function fetchWorkoutHistory(profileId, routineId) {
 }
 
 export async function saveWorkoutSession(profileId, session) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
 
   const { data: sessionData, error: sessionError } = await supabase
     .from('workout_sessions')
@@ -310,7 +312,7 @@ export async function saveWorkoutSession(profileId, session) {
   for (const exercise of session.exercises || []) {
     for (const set of exercise.sets || []) {
       const parsedWeight = parseFloat(set.weight);
-      const parsedReps = parseInt(set.reps, 10);
+      const parsedReps = parseInt(set.repsDone || set.reps, 10);
 
       setsToInsert.push({
         session_id: sessionData.id,
@@ -328,9 +330,7 @@ export async function saveWorkoutSession(profileId, session) {
       .from('session_sets')
       .insert(setsToInsert);
 
-    if (setsError) {
-      console.warn('⚠️ Error al insertar series:', setsError);
-    }
+    if (setsError) throw setsError;
   }
 }
 
@@ -356,7 +356,10 @@ export async function fetchDailyIntake(profileId) {
 }
 
 export async function addDailyIntakeItem(profileId, item) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return null;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
+
   const { data, error } = await supabase
     .from('daily_intake')
     .insert({
@@ -375,7 +378,10 @@ export async function addDailyIntakeItem(profileId, item) {
 }
 
 export async function deleteDailyIntakeItem(profileId, intakeId) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
+
   const { error } = await supabase
     .from('daily_intake')
     .delete()
@@ -397,7 +403,10 @@ export async function fetchFoods() {
 }
 
 export async function saveFood(food) {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new TypeError('Device is offline');
+  }
+
   const { error } = await supabase
     .from('foods')
     .upsert(food, { onConflict: 'id' });

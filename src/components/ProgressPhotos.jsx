@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
   Camera, X, Trash2, ArrowLeftRight, Image as ImageIcon, ArrowLeft, 
-  Loader2, ChevronLeft, ChevronRight, Share2 
+  Loader2, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -18,32 +18,33 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
   const [rightPhoto, setRightPhoto] = useState(null);
   const [sliderPos, setSliderPos] = useState(50);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
-  
-  // Estado para el visor de foto en pantalla completa (Lightbox)
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState(null);
 
-  const fileRef = useRef();
-  const sliderRef = useRef();
+  const fileRef = useRef(null);
+  const sliderRef = useRef(null);
 
   useEffect(() => {
+    if (!activeProfile?.id) return;
+    let isMounted = true;
+
     const loadPhotos = async () => {
       const cached = localStorage.getItem(STORAGE_KEY(activeProfile.id));
-      if (cached) {
-        try { setPhotos(JSON.parse(cached)); } catch (e) {}
+      if (cached && isMounted) {
+        try { setPhotos(JSON.parse(cached)); } catch {}
       }
       try {
         const { data: files, error } = await supabase.storage.from(BUCKET_NAME).list(activeProfile.id, {
           sortBy: { column: 'created_at', order: 'desc' },
           limit: 50,
         });
-        if (!error && files) {
+        if (!error && files && isMounted) {
           const photoList = files.map(file => {
             const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(`${activeProfile.id}/${file.name}`);
             return {
-              id: file.id,
+              id: file.id || file.name,
               url: publicUrl,
               name: file.name,
-              created_at: file.created_at,
+              created_at: file.created_at || new Date().toISOString(),
             };
           });
           setPhotos(photoList);
@@ -53,24 +54,32 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         console.error('Error al cargar fotos:', err);
       }
     };
+
     loadPhotos();
-  }, [activeProfile.id]);
+    return () => { isMounted = false; };
+  }, [activeProfile?.id]);
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file || !activeProfile?.id) return;
+
     if (file.size > 10 * 1024 * 1024) {
       alert('La imagen no puede superar 10 MB');
       return;
     }
+
     setUploading(true);
     try {
-      const fileName = `${activeProfile.id}/${Date.now()}_${file.name}`;
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${activeProfile.id}/${Date.now()}_${sanitizedName}`;
+      
       const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file, {
         cacheControl: '3600',
         upsert: false,
       });
+
       if (uploadError) throw uploadError;
+
       const { data: { publicUrl } } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
       const newPhoto = {
         id: Date.now().toString(),
@@ -78,14 +87,18 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         name: fileName,
         created_at: new Date().toISOString(),
       };
-      const updated = [newPhoto, ...photos];
-      setPhotos(updated);
-      localStorage.setItem(STORAGE_KEY(activeProfile.id), JSON.stringify(updated));
+
+      setPhotos(prev => {
+        const updated = [newPhoto, ...prev];
+        localStorage.setItem(STORAGE_KEY(activeProfile.id), JSON.stringify(updated));
+        return updated;
+      });
     } catch (err) {
       console.error('Error al subir foto:', err);
-      alert('Error al subir la foto');
+      alert('Error al subir la foto a Supabase');
     } finally {
       setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -94,20 +107,24 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
     try {
       const path = `${activeProfile.id}/${photo.name.split('/').pop()}`;
       await supabase.storage.from(BUCKET_NAME).remove([path]);
-      const updated = photos.filter(p => p.id !== photo.id);
-      setPhotos(updated);
-      localStorage.setItem(STORAGE_KEY(activeProfile.id), JSON.stringify(updated));
+      
+      setPhotos(prev => {
+        const updated = prev.filter(p => p.id !== photo.id);
+        localStorage.setItem(STORAGE_KEY(activeProfile.id), JSON.stringify(updated));
+        return updated;
+      });
+
       if (leftPhoto?.id === photo.id) setLeftPhoto(null);
       if (rightPhoto?.id === photo.id) setRightPhoto(null);
       setSelectedPhotos(prev => prev.filter(p => p.id !== photo.id));
       if (viewingPhotoIndex !== null) setViewingPhotoIndex(null);
     } catch (err) {
-      console.error('Error al eliminar:', err);
+      console.error('Error al eliminar foto:', err);
     }
   };
 
   const toggleSelect = (photo) => {
-    if (selectedPhotos.find(p => p.id === photo.id)) {
+    if (selectedPhotos.some(p => p.id === photo.id)) {
       setSelectedPhotos(prev => prev.filter(p => p.id !== photo.id));
     } else if (selectedPhotos.length < 2) {
       setSelectedPhotos(prev => [...prev, photo]);
@@ -159,7 +176,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
     };
   }, [handleSliderMove, stopDrag]);
 
-  // Navegación dentro del visor de fotos
   const currentViewingPhoto = viewingPhotoIndex !== null ? photos[viewingPhotoIndex] : null;
 
   const handlePrevPhoto = (e) => {
@@ -187,7 +203,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         </button>
         <h2 className="text-lg font-semibold text-white tracking-tight">Fotos de Progreso</h2>
         <button
-          onClick={() => fileRef.current.click()}
+          onClick={() => fileRef.current?.click()}
           disabled={uploading}
           className="p-3 rounded-full bg-white/[0.03] border border-white/[0.06] text-[#D4FF00] hover:text-white active:scale-95 transition-all disabled:opacity-40"
           aria-label="Subir foto"
@@ -201,12 +217,12 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         <div className="px-5 mb-3 relative z-10">
           <div className="bg-white/[0.02] border border-white/[0.05] backdrop-blur-xl rounded-2xl px-4 py-3 flex items-center gap-3 text-xs text-zinc-400">
             <Loader2 size={14} className="animate-spin text-[#D4FF00]" />
-            <span className="font-medium tracking-wide">Subiendo foto...</span>
+            <span className="font-medium tracking-wide">Subiendo foto a la nube...</span>
           </div>
         </div>
       )}
 
-      {/* Modo Comparar con Slider */}
+      {/* Modo Comparar */}
       {compareMode && leftPhoto && rightPhoto ? (
         <div className="flex-1 flex flex-col px-5 space-y-4 relative z-10">
           <div className="flex justify-between items-center bg-white/[0.02] border border-white/[0.05] backdrop-blur-sm p-3 rounded-2xl">
@@ -250,7 +266,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto px-5 relative z-10">
+        <div className="flex-1 overflow-y-auto px-5 relative z-10 no-scrollbar">
           {photos.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-zinc-500 gap-5">
               <div className="p-6 rounded-full bg-white/[0.02] border border-white/[0.05]">
@@ -268,7 +284,7 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
               {selectedPhotos.length === 2 && (
                 <button
                   onClick={startCompare}
-                  className="mb-4 w-full py-4 volt-button rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)]"
+                  className="mb-4 w-full py-4 volt-button rounded-2xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_0_20px_rgba(212,255,0,0.3)] font-mono font-black"
                 >
                   <ArrowLeftRight size={16} strokeWidth={2.5} />
                   Comparar seleccionadas
@@ -332,13 +348,12 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
         </div>
       )}
 
-      {/* ✅ LIGHTBOX: VISOR DE FOTO EN PANTALLA COMPLETA CON NAVEGACIÓN */}
+      {/* Lightbox / Visor de pantalla completa */}
       {currentViewingPhoto && ReactDOM.createPortal(
         <div 
           className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-2xl flex flex-col justify-between p-4 animate-fade-in select-none"
           onClick={() => setViewingPhotoIndex(null)}
         >
-          {/* Header del Lightbox */}
           <div className="flex items-center justify-between pt-2 z-10" onClick={e => e.stopPropagation()}>
             <div className="text-left">
               <span className="text-[10px] font-mono uppercase text-[#D4FF00] font-bold">Foto de Progreso</span>
@@ -364,7 +379,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
             </div>
           </div>
 
-          {/* Imagen Central con Flechas */}
           <div className="relative flex-1 flex items-center justify-center my-auto overflow-hidden">
             <img 
               src={currentViewingPhoto.url} 
@@ -373,7 +387,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
               onClick={e => e.stopPropagation()}
             />
 
-            {/* Flecha Anterior */}
             {viewingPhotoIndex > 0 && (
               <button
                 onClick={handlePrevPhoto}
@@ -383,7 +396,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
               </button>
             )}
 
-            {/* Flecha Siguiente */}
             {viewingPhotoIndex < photos.length - 1 && (
               <button
                 onClick={handleNextPhoto}
@@ -394,7 +406,6 @@ export default function ProgressPhotos({ activeProfile, onBack }) {
             )}
           </div>
 
-          {/* Footer del Lightbox */}
           <div className="text-center pb-4 z-10 font-mono text-[10px] text-zinc-500">
             Toca fuera o la X para cerrar · Desliza con las flechas
           </div>

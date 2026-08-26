@@ -1,5 +1,5 @@
 // src/components/GymTracker.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Plus, Edit3, Trash2 } from 'lucide-react';
 import {
   updatePersonalRecords, getDayRecords, limitHistory,
@@ -24,22 +24,9 @@ import TrackerView from './gym/TrackerView';
 import FinishedView from './gym/FinishedView';
 import HistoryView from './gym/HistoryView';
 
-const AnimatedView = ({ children, isActive }) => (
-  <div
-    className={`absolute inset-0 transition-all duration-500 ease-out-expo ${
-      isActive
-        ? 'opacity-100 translate-y-0 blur-0 z-10'
-        : 'opacity-0 translate-y-3 blur-sm pointer-events-none z-0'
-    }`}
-    aria-hidden={!isActive}
-  >
-    {children}
-  </div>
-);
-
 export default function GymTracker({ 
   activeProfile, 
-  routines, 
+  routines = [], 
   onUpdateRoutines, 
   openLibrary, 
   onLibraryOpened, 
@@ -61,12 +48,17 @@ export default function GymTracker({
   const [showImportModal, setShowImportModal] = useState(false);
   const [globalRoutinesVersion, setGlobalRoutinesVersion] = useState(0);
 
+  const showToast = useCallback((msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2500);
+  }, []);
+
   const navigate = useCallback((nextView) => {
     setPreviousView(view);
     setView(nextView);
   }, [view]);
 
-  const currentRoutine = routines.find(r => r.is_active === true);
+  const currentRoutine = useMemo(() => routines.find(r => r.is_active === true), [routines]);
   const isAdmin = activeProfile?.id === 'adrian';
 
   useEffect(() => {
@@ -91,12 +83,11 @@ export default function GymTracker({
 
     const updatedRoutines = routines.map(r => ({
       ...r,
-      is_active: r.id === routineToActivate.id ? true : false
+      is_active: r.id === routineToActivate.id
     }));
 
     onUpdateRoutines(updatedRoutines);
-    setToastMessage(`✅ "${routineToActivate.name}" ahora está En curso`);
-    setTimeout(() => setToastMessage(null), 2500);
+    showToast(`✅ "${routineToActivate.name}" ahora está En curso`);
 
     try {
       if (previousActive) {
@@ -106,26 +97,24 @@ export default function GymTracker({
       if (newActive) {
         await saveUserRoutine(activeProfile.id, newActive);
       }
-    } catch (e) {
-      if (previousActive) addToQueue('saveRoutine', { ...previousActive, is_active: false });
-      if (newActive) addToQueue('saveRoutine', newActive);
+    } catch {
+      if (previousActive) addToQueue('saveRoutine', { ...previousActive, is_active: false, profileId: activeProfile.id });
+      if (newActive) addToQueue('saveRoutine', { ...newActive, profileId: activeProfile.id });
     }
     navigate('home');
   };
 
   const handleImportGlobal = async (globalRoutineId) => {
-    if (!activeProfile) return;
+    if (!activeProfile?.id) return;
     try {
       await importRoutineToProfile(activeProfile.id, globalRoutineId);
       const freshRoutines = await fetchUserRoutines(activeProfile.id);
       onUpdateRoutines(freshRoutines);
-      setToastMessage('✅ Rutina importada correctamente');
-      setTimeout(() => setToastMessage(null), 2500);
+      showToast('✅ Rutina importada correctamente');
       setShowImportModal(false);
     } catch (err) {
       console.error('Error importando rutina:', err);
-      setToastMessage('❌ Error al importar la rutina');
-      setTimeout(() => setToastMessage(null), 2500);
+      showToast('❌ Error al importar la rutina');
     }
   };
 
@@ -134,13 +123,11 @@ export default function GymTracker({
     if (window.confirm('¿Eliminar esta rutina global? Las copias locales existentes se mantendrán.')) {
       try {
         await deleteUserRoutine(activeProfile.id, routineId, true);
-        setToastMessage('🗑️ Rutina global eliminada');
-        setTimeout(() => setToastMessage(null), 2500);
+        showToast('🗑️ Rutina global eliminada');
         setGlobalRoutinesVersion(prev => prev + 1);
-      } catch (err) {
-        console.error('Error eliminando global:', err);
-        setToastMessage('❌ Error al eliminar');
-        setTimeout(() => setToastMessage(null), 2500);
+      } catch {
+        addToQueue('deleteRoutine', { id: routineId, isGlobal: true, profileId: activeProfile.id });
+        showToast('🗑️ Rutina eliminada (pendiente sinc)');
       }
     }
   };
@@ -151,15 +138,17 @@ export default function GymTracker({
   };
 
   const loadAllHistory = useCallback(async () => {
-    if (!activeProfile) return;
+    if (!activeProfile?.id) return;
     const allSessions = [];
+    const prefix = `workoutHistory_${activeProfile.id}_`;
+
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(`workoutHistory_${activeProfile.id}_`)) {
+      if (key?.startsWith(prefix)) {
         try {
           const sessions = JSON.parse(localStorage.getItem(key));
           if (Array.isArray(sessions)) allSessions.push(...sessions);
-        } catch (e) {}
+        } catch {}
       }
     }
 
@@ -170,11 +159,11 @@ export default function GymTracker({
     const lastSets = {};
     const sorted = [...allSessions].sort((a, b) => new Date(b.date) - new Date(a.date));
     sorted.forEach(session => {
-      session.exercises.forEach(ex => {
+      (session.exercises || []).forEach(ex => {
         const key = ex.libraryExerciseId || ex.id;
         if (!lastSets[key]) {
           lastSets[key] = {
-            sets: ex.sets.map(s => ({ weight: s.weight, reps: s.reps })),
+            sets: (ex.sets || []).map(s => ({ weight: s.weight, reps: s.repsDone || s.reps })),
             date: session.date,
             dayIndex: session.dayIndex
           };
@@ -192,9 +181,11 @@ export default function GymTracker({
       }
     });
     setCompletedDaysMap(completed);
-  }, [activeProfile]);
+  }, [activeProfile?.id]);
 
-  useEffect(() => { if (activeProfile) loadAllHistory(); }, [activeProfile, loadAllHistory]);
+  useEffect(() => { 
+    if (activeProfile?.id) loadAllHistory(); 
+  }, [activeProfile?.id, loadAllHistory]);
 
   const handleSelectRoutine = (routine) => {
     setActiveRoutine(routine);
@@ -203,11 +194,11 @@ export default function GymTracker({
 
   const startWorkout = (routine, dayIndex) => {
     setActiveDayIndex(dayIndex);
-    const trainingDay = routine.trainingDays[dayIndex];
+    const trainingDay = routine.trainingDays?.[dayIndex];
     if (!trainingDay) return;
 
     if (!trainingDay.exercises || trainingDay.exercises.length === 0) {
-      alert('Esta rutina no tiene ejercicios configurados para este día.');
+      showToast('⚠️ Esta rutina no tiene ejercicios en este día');
       return;
     }
 
@@ -219,7 +210,7 @@ export default function GymTracker({
         ...ex,
         muscle: ex.muscle || '',
         secondaryMuscles: ex.secondaryMuscles || ex.secondary_muscles || '',
-        sets: ex.sets.map(s => {
+        sets: (ex.sets || []).map(s => {
           const suggestion = getProgressionSuggestion(lastSets, s.reps, s.weight || '');
           return {
             ...s,
@@ -250,8 +241,8 @@ export default function GymTracker({
       onUpdateRoutines(updated);
       try { 
         await deleteUserRoutine(activeProfile.id, routineId, false);
-      } catch (e) { 
-        console.error(e); 
+      } catch { 
+        addToQueue('deleteRoutine', { id: routineId, profileId: activeProfile.id });
       }
       if (currentRoutine?.id === routineId) { 
         setActiveRoutine(null); 
@@ -264,10 +255,10 @@ export default function GymTracker({
   const loadHistoryAndRecords = async (routineId, dayIndex) => {
     try {
       const historyArray = await fetchWorkoutHistory(activeProfile.id, routineId);
-      const sessionsSameDay = historyArray.filter(s => s.dayIndex === dayIndex);
+      const sessionsSameDay = (historyArray || []).filter(s => s.dayIndex === dayIndex);
       setLastSession(sessionsSameDay.length > 0 ? sessionsSameDay[sessionsSameDay.length - 1] : null);
       setDayRecords(getDayRecords(sessionsSameDay));
-    } catch (err) {
+    } catch {
       const saved = localStorage.getItem(`workoutHistory_${activeProfile.id}_${routineId}`);
       if (saved) {
         const arr = JSON.parse(saved);
@@ -278,30 +269,36 @@ export default function GymTracker({
     }
   };
 
-  const renderView = () => {
-    switch (view) {
-      case 'home':
-        return (
+  return (
+    <div className="flex-1 flex flex-col bg-[#0A0A0C] relative min-h-0 overflow-hidden select-none">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,#ffffff08,transparent_80%)]" />
+      </div>
+
+      <div className="flex-1 relative overflow-hidden">
+        {view === 'home' && (
           <RoutineHome
             currentRoutine={currentRoutine}
             onStartWorkout={handleSelectRoutine}
             onManageTemplates={() => navigate('library')}
             onDeleteRoutine={handleDeleteRoutine}
           />
-        );
-      case 'daySelector':
-        return activeRoutine ? (
+        )}
+
+        {view === 'daySelector' && activeRoutine && (
           <DaySelector
             routine={activeRoutine}
             onSelectDay={startWorkout}
             onBack={() => navigate('home')}
             completedDays={completedDaysMap}
           />
-        ) : null;
-      case 'history':
-        return <HistoryView activeProfile={activeProfile} onBack={() => navigate('home')} />;
-      case 'library':
-        return (
+        )}
+
+        {view === 'history' && (
+          <HistoryView activeProfile={activeProfile} onBack={() => navigate('home')} />
+        )}
+
+        {view === 'library' && (
           <div className="flex flex-col h-full bg-[#0A0A0C] p-4 relative">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-xl font-bold text-white tracking-tight">Mis Rutinas</h2>
@@ -310,7 +307,7 @@ export default function GymTracker({
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto space-y-3 pb-20">
+            <div className="flex-1 overflow-y-auto space-y-3 pb-20 no-scrollbar">
               {routines.map(routine => (
                 <div key={routine.id} className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 flex items-center justify-between">
                   <div>
@@ -340,7 +337,7 @@ export default function GymTracker({
                 </div>
               ))}
               <div className="flex flex-col gap-3 pt-4">
-                 <button onClick={() => setShowImportModal(true)} className="w-full py-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-sm text-zinc-300 hover:text-white hover:border-white/[0.12] transition-colors">
+                 <button onClick={() => setShowImportModal(true)} className="w-full py-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-sm text-zinc-300 hover:text-white hover:border-white/[0.12] transition-colors font-bold">
                    Importar rutina global
                  </button>
                  <button onClick={() => { setEditingRoutine(null); navigate('create'); }} className="w-full py-4 border border-dashed border-white/[0.08] rounded-2xl text-sm text-zinc-400 hover:border-[#D4FF00]/30 hover:text-[#D4FF00] flex items-center justify-center gap-2 font-medium">
@@ -349,9 +346,9 @@ export default function GymTracker({
               </div>
             </div>
           </div>
-        );
-      case 'exerciseLibrary':
-        return (
+        )}
+
+        {view === 'exerciseLibrary' && (
           <LibraryView
             password={libraryPassword}
             onSetPassword={(newPass) => {
@@ -360,16 +357,18 @@ export default function GymTracker({
             }}
             onBack={() => navigate('home')}
           />
-        );
-      case 'libraryAuth':
-        return <LibraryAuth password={libraryPassword} onCorrectPassword={() => navigate('library')} onBack={() => navigate(previousView)} />;
-      case 'create':
-        return (
+        )}
+
+        {view === 'libraryAuth' && (
+          <LibraryAuth password={libraryPassword} onCorrectPassword={() => navigate('library')} onBack={() => navigate(previousView)} />
+        )}
+
+        {view === 'create' && (
           <RoutineCreator
             initialData={editingRoutine}
             onSave={async (routineData) => {
               const isGlobal = editingRoutine?.is_global ?? (isAdmin ? true : false);
-              const routineId = crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`;
+              const routineId = editingRoutine?.id || (crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`);
               const routineToSave = {
                 ...routineData,
                 id: routineId,
@@ -387,14 +386,11 @@ export default function GymTracker({
 
                 const freshRoutines = await fetchUserRoutines(activeProfile.id);
                 onUpdateRoutines(freshRoutines);
-
-                setToastMessage(isGlobal ? '✅ Rutina creada y añadida a Mis rutinas' : '✅ Rutina guardada');
-                setTimeout(() => setToastMessage(null), 2500);
+                showToast(isGlobal ? '✅ Rutina creada y añadida a Mis rutinas' : '✅ Rutina guardada');
               } catch (e) {
                 console.error('Error guardando rutina:', e);
-                setToastMessage('❌ Error al guardar la rutina');
-                setTimeout(() => setToastMessage(null), 2500);
-                addToQueue('saveRoutine', routineToSave);
+                showToast('❌ Guardado en cola offline');
+                addToQueue('saveRoutine', { ...routineToSave, profileId: activeProfile.id });
               }
 
               setEditingRoutine(null);
@@ -402,9 +398,9 @@ export default function GymTracker({
             }}
             onCancel={() => { setEditingRoutine(null); navigate('library'); }}
           />
-        );
-      case 'tracker':
-        return routineData ? (
+        )}
+
+        {view === 'tracker' && routineData && (
           <TrackerView
             routineData={routineData}
             activeRoutine={activeRoutine}
@@ -423,54 +419,30 @@ export default function GymTracker({
 
               try { 
                 await saveWorkoutSession(activeProfile.id, session); 
-              } catch (e) { 
-                addToQueue('saveWorkoutSession', session); 
+              } catch { 
+                addToQueue('saveWorkoutSession', { session, profileId: activeProfile.id }); 
               }
 
-              // Evento global para refrescar logros, rachas y EvolutionView en vivo
               window.dispatchEvent(new CustomEvent('workoutFinished'));
-
               await loadAllHistory();
               navigate('finished');
             }}
             onGoBack={() => navigate('daySelector')}
           />
-        ) : null;
-      case 'finished':
-        return (
+        )}
+
+        {view === 'finished' && (
           <FinishedView onRestart={() => {
             navigate('home');
             setActiveRoutine(null);
             setActiveDayIndex(null);
             setRoutineData(null);
           }} />
-        );
-      default: return null;
-    }
-  };
-
-  const isActive = (v) => view === v;
-
-  return (
-    <div className="flex-1 flex flex-col bg-[#0A0A0C] relative min-h-0 overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,#ffffff08,transparent_80%)]" />
-      </div>
-
-      <div className="flex-1 relative">
-        {view === 'home' && <AnimatedView isActive={isActive('home')}>{renderView()}</AnimatedView>}
-        {view === 'daySelector' && <AnimatedView isActive={isActive('daySelector')}>{renderView()}</AnimatedView>}
-        {view === 'history' && <AnimatedView isActive={isActive('history')}>{renderView()}</AnimatedView>}
-        {view === 'library' && <AnimatedView isActive={isActive('library')}>{renderView()}</AnimatedView>}
-        {view === 'exerciseLibrary' && <AnimatedView isActive={isActive('exerciseLibrary')}>{renderView()}</AnimatedView>}
-        {view === 'libraryAuth' && <AnimatedView isActive={isActive('libraryAuth')}>{renderView()}</AnimatedView>}
-        {view === 'create' && <AnimatedView isActive={isActive('create')}>{renderView()}</AnimatedView>}
-        {view === 'tracker' && <AnimatedView isActive={isActive('tracker')}>{renderView()}</AnimatedView>}
-        {view === 'finished' && <AnimatedView isActive={isActive('finished')}>{renderView()}</AnimatedView>}
+        )}
       </div>
 
       {toastMessage && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#D4FF00] text-[#09090B] font-semibold px-5 py-2.5 rounded-full text-xs tracking-wide shadow-[0_0_24px_rgba(212,255,0,0.3)] backdrop-blur-sm">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#D4FF00] text-[#09090B] font-black px-5 py-2.5 rounded-full text-xs tracking-wide shadow-[0_0_24px_rgba(212,255,0,0.3)] backdrop-blur-sm">
           {toastMessage}
         </div>
       )}
@@ -495,7 +467,7 @@ function ImportRoutineModal({
   onFetchGlobalRoutines, 
   onImport, 
   onClose, 
-  currentRoutines, 
+  currentRoutines = [], 
   isAdmin,
   onEditGlobal,
   onDeleteGlobal,
@@ -506,27 +478,42 @@ function ImportRoutineModal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     if (onFetchGlobalRoutines) {
       onFetchGlobalRoutines()
-        .then(data => { setGlobalRoutines(data || []); setLoading(false); })
-        .catch(err => { console.error(err); setGlobalRoutines([]); setLoading(false); });
+        .then(data => { 
+          if (isMounted) {
+            setGlobalRoutines(data || []); 
+            setLoading(false); 
+          }
+        })
+        .catch(err => { 
+          console.error(err); 
+          if (isMounted) {
+            setGlobalRoutines([]); 
+            setLoading(false); 
+          }
+        });
     }
+    return () => { isMounted = false; };
   }, [onFetchGlobalRoutines, refreshToken]);
 
-  const availableRoutines = loading ? [] : globalRoutines.filter(
-    gr => !currentRoutines.some(cr => cr.parent_routine_id === gr.id)
-  );
+  const availableRoutines = useMemo(() => {
+    return loading ? [] : globalRoutines.filter(
+      gr => !currentRoutines.some(cr => cr.parent_routine_id === gr.id)
+    );
+  }, [loading, globalRoutines, currentRoutines]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 z-[100] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl animate-scale-in">
         <h3 className="text-white font-bold text-base mb-2">Importar rutina global</h3>
         <p className="text-zinc-400 text-xs mb-4">Selecciona una plantilla para añadirla a tus rutinas.</p>
-        <div className="flex-1 overflow-y-auto space-y-2">
+        <div className="flex-1 overflow-y-auto space-y-2 no-scrollbar">
           {loading ? (
-            <div className="text-center py-8 text-zinc-500">Cargando...</div>
+            <div className="text-center py-8 text-zinc-500 font-mono text-xs">Cargando rutinas...</div>
           ) : availableRoutines.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-4">No hay rutinas globales disponibles.</p>
+            <p className="text-zinc-500 text-xs text-center py-6 font-mono">No hay rutinas globales disponibles para importar.</p>
           ) : (
             availableRoutines.map(r => (
               <div key={r.id} className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
@@ -545,7 +532,7 @@ function ImportRoutineModal({
                       </button>
                     </>
                   )}
-                  <button onClick={() => onImport(r.id)} disabled={!r.id} className="px-3 py-1.5 bg-[#D4FF00] text-[#09090B] text-xs font-bold rounded-lg hover:bg-[#C4E600] disabled:opacity-30">
+                  <button onClick={() => onImport(r.id)} disabled={!r.id} className="px-3 py-1.5 bg-[#D4FF00] text-[#09090B] text-xs font-bold rounded-lg hover:bg-[#C4E600] disabled:opacity-30 active:scale-95 transition-all font-mono">
                     Importar
                   </button>
                 </div>
@@ -554,7 +541,7 @@ function ImportRoutineModal({
           )}
         </div>
         <div className="flex justify-end mt-4 pt-4 border-t border-white/[0.05]">
-          <button onClick={onClose} className="px-4 py-2 border border-white/[0.08] rounded-xl text-zinc-400 text-sm">Cancelar</button>
+          <button onClick={onClose} className="px-4 py-2 border border-white/[0.08] rounded-xl text-zinc-400 text-xs font-bold active:scale-95">Cancelar</button>
         </div>
       </div>
     </div>

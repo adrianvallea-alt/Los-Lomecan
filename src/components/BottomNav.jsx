@@ -1,5 +1,5 @@
 // src/components/BottomNav.jsx
-import React from 'react';
+import React, { memo } from 'react';
 import { Home, Utensils, Dumbbell, TrendingUp } from 'lucide-react';
 
 const tabs = [
@@ -11,23 +11,24 @@ const tabs = [
 
 const triggerHaptic = (ms = 18) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(ms); } catch (e) {}
+    try { navigator.vibrate(ms); } catch {}
   }
 };
 
-export default function BottomNav({ activeTab, setActiveTab, pendingWorkout }) {
+export default memo(function BottomNav({ activeTab, setActiveTab, pendingWorkout }) {
   return (
     <>
-      {/* Cortina de degradado oscura para desvanecer el scroll */}
-      <div className="fixed bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-[#050507] via-[#050507]/90 to-transparent pointer-events-none z-40" />
+      {/* Cortina de degradado oscura para desvanecer el scroll de fondo */}
+      <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050507] via-[#050507]/90 to-transparent pointer-events-none z-40" />
 
-      {/* Dock Flotante de Cristal Obsidiana */}
+      {/* Dock Flotante de Cristal Obsidiana con soporte dinámico para Safe Area */}
       <nav
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md pointer-events-auto select-none"
+        className="fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md pointer-events-auto select-none"
+        style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
         role="navigation"
         aria-label="Navegación principal"
       >
-        <div className="bg-[#0C0C12]/95 border border-white/[0.12] rounded-[2.25rem] px-2.5 py-2 flex justify-around items-center relative shadow-[0_20px_50px_rgba(0,0,0,0.95),0_0_20px_rgba(212,255,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-2xl safe-bottom">
+        <div className="bg-[#0C0C12]/95 border border-white/[0.12] rounded-[2.25rem] px-2.5 py-2 flex justify-around items-center relative shadow-[0_20px_50px_rgba(0,0,0,0.95),0_0_20px_rgba(212,255,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-2xl">
           
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -86,4 +87,4 @@ export default function BottomNav({ activeTab, setActiveTab, pendingWorkout }) {
       </nav>
     </>
   );
-}
+});

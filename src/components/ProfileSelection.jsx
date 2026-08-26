@@ -1,24 +1,24 @@
 // src/components/ProfileSelection.jsx
-import React, { useState } from 'react';
-import { Plus, Edit3, Lock, Crown, Sparkles, Shield, User, ChevronRight } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { Plus, Edit3, Lock, Crown, Sparkles } from 'lucide-react';
 import PinModal from './PinModal';
 import EditProfileModal from './EditProfileModal';
 import { getColorHex } from '../utils/colors';
 
 const triggerHaptic = (ms = 20) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(ms); } catch (e) {}
+    try { navigator.vibrate(ms); } catch {}
   }
 };
 
-export default function ProfileSelection({ profiles, onSelectProfile, onAddProfile, onUpdateProfile }) {
+export default function ProfileSelection({ profiles = [], onSelectProfile, onAddProfile, onUpdateProfile }) {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [pinAction, setPinAction] = useState(null); // 'select' | 'edit'
   const [showPinModal, setShowPinModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
 
-  const handleProfileClick = (profile) => {
+  const handleProfileClick = useCallback((profile) => {
     triggerHaptic(20);
     if (profile.pin) {
       setSelectedProfile(profile);
@@ -27,9 +27,9 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
     } else {
       onSelectProfile(profile);
     }
-  };
+  }, [onSelectProfile]);
 
-  const handleEditClick = (e, profile) => {
+  const handleEditClick = useCallback((e, profile) => {
     e.stopPropagation();
     triggerHaptic(20);
     if (profile.pin) {
@@ -40,9 +40,9 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
       setEditingProfile(profile);
       setShowEditModal(true);
     }
-  };
+  }, []);
 
-  const handlePinSuccess = () => {
+  const handlePinSuccess = useCallback(() => {
     setShowPinModal(false);
     const targetProfile = selectedProfile;
     setSelectedProfile(null);
@@ -50,21 +50,26 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
     if (pinAction === 'edit') {
       setEditingProfile(targetProfile);
       setShowEditModal(true);
-    } else {
+    } else if (targetProfile) {
       onSelectProfile(targetProfile);
     }
-  };
+  }, [selectedProfile, pinAction, onSelectProfile]);
 
-  const handleSaveProfile = (updatedProfile) => {
+  const handleSaveProfile = useCallback((updatedProfile) => {
     onUpdateProfile(updatedProfile);
     setShowEditModal(false);
     setEditingProfile(null);
-  };
+  }, [onUpdateProfile]);
 
   return (
-    <div className="min-h-[100dvh] bg-[#050507] flex flex-col justify-between py-10 px-6 select-none relative overflow-hidden no-scrollbar">
-      
-      {/* Luces atmosféricas de fondo OLED */}
+    <div 
+      className="min-h-[100dvh] bg-[#050507] flex flex-col justify-between px-6 select-none relative overflow-y-auto no-scrollbar"
+      style={{
+        paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))',
+        paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))'
+      }}
+    >
+      {/* Luces atmosféricas de fondo */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[350px] bg-[#D4FF00]/[0.04] rounded-full blur-[140px]" />
         <div className="absolute bottom-0 right-0 w-[350px] h-[300px] bg-[#00F5FF]/[0.02] rounded-full blur-[140px]" />
@@ -102,7 +107,7 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
                 style={{ animationDelay: `${index * 60}ms` }}
                 onClick={() => handleProfileClick(profile)}
               >
-                {/* Botón de configuración / edición estilo perno metálico */}
+                {/* Botón de configuración / edición */}
                 <button
                   onClick={(e) => handleEditClick(e, profile)}
                   className="absolute top-2.5 right-2.5 p-1.5 bg-[#050507] border border-white/[0.08] rounded-full text-zinc-500 hover:text-white hover:border-[#D4FF00]/40 active:scale-90 transition-all z-20"
@@ -121,7 +126,8 @@ export default function ProfileSelection({ profiles, onSelectProfile, onAddProfi
                   <div className="absolute inset-0 rounded-full border-2 border-white/[0.08] group-hover:border-[#D4FF00]/60 transition-colors shadow-inner-light" />
                   
                   <div
-                    className={`absolute inset-[5px] rounded-full flex items-center justify-center text-xl font-bold overflow-hidden transition-transform group-hover:scale-105 ${profile.color}`}
+                    className="absolute inset-[5px] rounded-full flex items-center justify-center text-xl font-bold overflow-hidden transition-transform group-hover:scale-105"
+                    style={{ backgroundColor: hexColor }}
                   >
                     {profile.avatar && profile.avatar.startsWith('http') ? (
                       <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />

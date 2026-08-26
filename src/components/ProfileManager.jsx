@@ -1,6 +1,6 @@
 // src/components/ProfileManager.jsx
 import React, { useState } from 'react';
-import { X, Edit3, Trash2, Users, Search, Save, AlertTriangle, Check, Plus, Shield, User } from 'lucide-react';
+import { X, Edit3, Trash2, Users, Search, Save, AlertTriangle, Plus } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { updateProfile, deleteProfile } from '../lib/dataService';
 import { COLORS, getColorHex } from '../utils/colors';
@@ -14,11 +14,11 @@ const ROLES = ['Coach', 'Athlete', 'Atleta Pro', 'Fitness Partner', 'Principiant
 
 const triggerHaptic = (ms = 20) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(ms); } catch (e) {}
+    try { navigator.vibrate(ms); } catch {}
   }
 };
 
-export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) {
+export default function ProfileManager({ profiles = [], onUpdateProfiles, onClose }) {
   const [editingProfileId, setEditingProfileId] = useState(null);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -36,8 +36,8 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
   });
 
   const filteredProfiles = profiles.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.id.toLowerCase().includes(search.toLowerCase()) ||
+    p.name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.id?.toLowerCase().includes(search.toLowerCase()) ||
     (p.role && p.role.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -95,7 +95,10 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
 
     triggerHaptic(30);
     setSaving(true);
-    const updatedProfile = { ...form };
+    const updatedProfile = { 
+      ...form, 
+      id: form.id.toLowerCase().replace(/[^a-z0-9_]/g, '') 
+    };
 
     let updatedProfiles;
     if (editingProfileId) {
@@ -104,16 +107,17 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
       updatedProfiles = [...profiles, updatedProfile];
     }
 
+    // Actualización local inmediata
+    onUpdateProfiles(updatedProfiles);
+
     try {
       await updateProfile(updatedProfile);
-      onUpdateProfiles(updatedProfiles);
       toast.success(editingProfileId ? 'Perfil actualizado' : 'Perfil creado');
-      resetForm();
-    } catch (e) {
-      console.error('Error al guardar perfil:', e);
-      toast.error('Error al guardar en base de datos');
+    } catch {
+      toast.success(editingProfileId ? 'Actualizado (offline)' : 'Creado (offline)');
     } finally {
       setSaving(false);
+      resetForm();
     }
   };
 
@@ -125,17 +129,18 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
     }
     triggerHaptic(40);
     setDeleting(profileId);
+    
+    const updatedProfiles = profiles.filter(p => p.id !== profileId);
+    onUpdateProfiles(updatedProfiles);
+
     try {
       await deleteProfile(profileId);
-      const updatedProfiles = profiles.filter(p => p.id !== profileId);
-      onUpdateProfiles(updatedProfiles);
       toast.success('Perfil eliminado');
-      setShowDeleteConfirm(null);
-    } catch (e) {
-      console.error('Error al eliminar:', e);
-      toast.error('Error al eliminar');
+    } catch {
+      toast.success('Perfil eliminado localmente');
     } finally {
       setDeleting(null);
+      setShowDeleteConfirm(null);
     }
   };
 
@@ -252,7 +257,7 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
           <Plus size={15} /> Añadir Nuevo Atleta
         </button>
 
-        {/* Formulario de Creación / Edición */}
+        {/* Formulario */}
         {(editingProfileId !== null || (!editingProfileId && form.name === '')) && (
           <div className="luxury-card p-5 space-y-4">
             <div className="flex justify-between items-center border-b border-white/[0.06] pb-3">
@@ -268,13 +273,12 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
             </div>
 
             <div className="space-y-3.5">
-              {/* ID y Nombre */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-mono font-bold text-zinc-400 block mb-1">ID ÚNICO</label>
                   <input
                     value={form.id}
-                    onChange={e => setForm({ ...form, id: e.target.value.toLowerCase().replace(/\s/g, '') })}
+                    onChange={e => setForm({ ...form, id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
                     placeholder="ej: carlos"
                     disabled={!!editingProfileId}
                     className="w-full bg-black/60 border border-white/[0.1] rounded-xl p-2.5 text-xs text-white disabled:opacity-40 focus:border-[#D4FF00] outline-none font-mono"
@@ -291,7 +295,6 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                 </div>
               </div>
 
-              {/* Rol */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 block mb-1">ROL / NIVEL</label>
                 <div className="flex gap-1.5 flex-wrap">
@@ -312,7 +315,6 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                 </div>
               </div>
 
-              {/* Paleta de Colores Dinámica (Ergonómica de 40px) */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 block mb-1.5">COLOR DE IDENTIDAD</label>
                 <div className="flex gap-2 flex-wrap">
@@ -331,15 +333,12 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                         }`}
                         style={{ backgroundColor: c.hex }}
                         aria-label={c.label}
-                      >
-                        {isSelected && <Check size={14} className="text-white drop-shadow-md" strokeWidth={3} />}
-                      </button>
+                      />
                     );
                   })}
                 </div>
               </div>
 
-              {/* Selector de Avatar / Emojis */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 block mb-1.5">AVATAR / ICONO</label>
                 <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto no-scrollbar p-1 bg-black/40 rounded-2xl border border-white/[0.05]">
@@ -363,7 +362,6 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                 </div>
               </div>
 
-              {/* PIN Opcional */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 block mb-1">PIN DE ACCESO (4 DÍGITOS, OPCIONAL)</label>
                 <input
@@ -377,7 +375,6 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                 />
               </div>
 
-              {/* Metas Nutricionales */}
               <div>
                 <label className="text-[10px] font-mono font-bold text-zinc-400 block mb-1.5">OBJETIVOS DIARIOS (METAS)</label>
                 <div className="grid grid-cols-4 gap-2 font-mono text-center">
@@ -385,8 +382,9 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                     <span className="text-[9px] text-zinc-400 uppercase">Kcal</span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={form.goals.cal}
-                      onChange={e => setForm({ ...form, goals: { ...form.goals, cal: parseInt(e.target.value) || 0 } })}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, cal: parseInt(e.target.value, 10) || 0 } })}
                       className="w-full bg-black/60 border border-white/[0.1] rounded-lg p-1.5 text-xs text-center font-bold text-white mt-0.5 focus:border-[#D4FF00] outline-none"
                     />
                   </div>
@@ -394,8 +392,9 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                     <span className="text-[9px] text-blue-400 uppercase">Proteína</span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={form.goals.pro}
-                      onChange={e => setForm({ ...form, goals: { ...form.goals, pro: parseInt(e.target.value) || 0 } })}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, pro: parseInt(e.target.value, 10) || 0 } })}
                       className="w-full bg-black/60 border border-white/[0.1] rounded-lg p-1.5 text-xs text-center font-bold text-blue-400 mt-0.5 focus:border-[#D4FF00] outline-none"
                     />
                   </div>
@@ -403,8 +402,9 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                     <span className="text-[9px] text-purple-400 uppercase">Carbos</span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={form.goals.carb}
-                      onChange={e => setForm({ ...form, goals: { ...form.goals, carb: parseInt(e.target.value) || 0 } })}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, carb: parseInt(e.target.value, 10) || 0 } })}
                       className="w-full bg-black/60 border border-white/[0.1] rounded-lg p-1.5 text-xs text-center font-bold text-purple-400 mt-0.5 focus:border-[#D4FF00] outline-none"
                     />
                   </div>
@@ -412,8 +412,9 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
                     <span className="text-[9px] text-amber-400 uppercase">Grasas</span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={form.goals.fat}
-                      onChange={e => setForm({ ...form, goals: { ...form.goals, fat: parseInt(e.target.value) || 0 } })}
+                      onChange={e => setForm({ ...form, goals: { ...form.goals, fat: parseInt(e.target.value, 10) || 0 } })}
                       className="w-full bg-black/60 border border-white/[0.1] rounded-lg p-1.5 text-xs text-center font-bold text-amber-400 mt-0.5 focus:border-[#D4FF00] outline-none"
                     />
                   </div>
@@ -421,7 +422,6 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
               </div>
             </div>
 
-            {/* Acciones de Guardar */}
             <div className="flex gap-2.5 pt-2">
               <button
                 onClick={resetForm}
@@ -432,7 +432,7 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(212,255,0,0.3)] disabled:opacity-40"
+                className="flex-1 py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(212,255,0,0.3)] disabled:opacity-40 font-mono"
               >
                 <Save size={15} />
                 {saving ? 'Guardando...' : editingProfileId ? 'Actualizar Atleta' : 'Crear Atleta'}
@@ -442,7 +442,6 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
         )}
       </div>
 
-      {/* DIÁLOGO DARK GLASS DE CONFIRMACIÓN PARA ELIMINAR */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in">
           <div className="luxury-card p-6 max-w-sm w-full space-y-4 border-rose-500/30 animate-scale-in">
@@ -457,7 +456,7 @@ export default function ProfileManager({ profiles, onUpdateProfiles, onClose }) 
               ¿Estás seguro de eliminar a <strong className="text-white">{profiles.find(p => p.id === showDeleteConfirm)?.name}</strong>? Se borrarán sus rutinas locales y registros.
             </p>
 
-            <div className="flex gap-2.5 pt-1">
+            <div className="flex gap-2.5 pt-1 font-mono">
               <button
                 onClick={() => setShowDeleteConfirm(null)}
                 className="flex-1 py-3 bg-white/[0.04] border border-white/[0.08] text-white text-xs font-bold rounded-xl active:scale-95"

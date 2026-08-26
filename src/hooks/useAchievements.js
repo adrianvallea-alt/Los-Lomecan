@@ -1,24 +1,26 @@
+// src/hooks/useAchievements.js
 import { useState, useEffect, useCallback } from 'react';
 
 const ACHIEVEMENTS_LIST = [
-  { id: 'first_session', name: 'Primera sesión', icon: '🎯', condition: (stats) => stats.totalSessions >= 1 },
-  { id: '5_sessions', name: '5 entrenamientos', icon: '🏅', condition: (stats) => stats.totalSessions >= 5 },
-  { id: '10_sessions', name: '10 entrenamientos', icon: '🔥', condition: (stats) => stats.totalSessions >= 10 },
-  { id: '25_sessions', name: '25 entrenamientos', icon: '💪', condition: (stats) => stats.totalSessions >= 25 },
-  { id: '50_sessions', name: '50 entrenamientos', icon: '🚀', condition: (stats) => stats.totalSessions >= 50 },
-  { id: '100_sessions', name: '100 entrenamientos', icon: '👑', condition: (stats) => stats.totalSessions >= 100 },
-  { id: 'streak_3', name: 'Racha de 3 días', icon: '⭐', condition: (stats) => stats.longestStreak >= 3 },
-  { id: 'streak_7', name: 'Racha de 7 días', icon: '🌟', condition: (stats) => stats.longestStreak >= 7 },
-  { id: 'streak_14', name: 'Racha de 14 días', icon: '✨', condition: (stats) => stats.longestStreak >= 14 },
-  { id: 'streak_30', name: 'Racha de 30 días', icon: '💎', condition: (stats) => stats.longestStreak >= 30 },
-  { id: 'volume_10000', name: '10,000 kg levantados', icon: '🏋️', condition: (stats) => stats.totalVolume >= 10000 },
-  { id: 'volume_50000', name: '50,000 kg levantados', icon: '🏆', condition: (stats) => stats.totalVolume >= 50000 },
-  { id: 'volume_100000', name: '100,000 kg levantados', icon: '👑', condition: (stats) => stats.totalVolume >= 100000 },
+  { id: 'first_session', name: 'Primera sesión', icon: '🎯', condition: (s) => s.totalSessions >= 1 },
+  { id: '5_sessions', name: '5 entrenamientos', icon: '🏅', condition: (s) => s.totalSessions >= 5 },
+  { id: '10_sessions', name: '10 entrenamientos', icon: '🔥', condition: (s) => s.totalSessions >= 10 },
+  { id: '25_sessions', name: '25 entrenamientos', icon: '💪', condition: (s) => s.totalSessions >= 25 },
+  { id: '50_sessions', name: '50 entrenamientos', icon: '🚀', condition: (s) => s.totalSessions >= 50 },
+  { id: '100_sessions', name: '100 entrenamientos', icon: '👑', condition: (s) => s.totalSessions >= 100 },
+  { id: 'streak_3', name: 'Racha de 3 días', icon: '⭐', condition: (s) => s.longestStreak >= 3 },
+  { id: 'streak_7', name: 'Racha de 7 días', icon: '🌟', condition: (s) => s.longestStreak >= 7 },
+  { id: 'streak_14', name: 'Racha de 14 días', icon: '✨', condition: (s) => s.longestStreak >= 14 },
+  { id: 'streak_30', name: 'Racha de 30 días', icon: '💎', condition: (s) => s.longestStreak >= 30 },
+  { id: 'volume_10000', name: '10,000 kg levantados', icon: '🏋️', condition: (s) => s.totalVolume >= 10000 },
+  { id: 'volume_50000', name: '50,000 kg levantados', icon: '🏆', condition: (s) => s.totalVolume >= 50000 },
+  { id: 'volume_100000', name: '100,000 kg levantados', icon: '👑', condition: (s) => s.totalVolume >= 100000 },
 ];
 
-function getDateKey(date) {
-  return new Date(date).toDateString();
-}
+const toISODateOnly = (date) => {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function useAchievements(activeProfileId) {
   const [stats, setStats] = useState({
@@ -32,102 +34,106 @@ export default function useAchievements(activeProfileId) {
   const calculateStats = useCallback(() => {
     if (!activeProfileId) return;
 
-    // Obtener todas las sesiones desde localStorage
     const allSessions = [];
+    const prefix = `workoutHistory_${activeProfileId}_`;
+
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(`workoutHistory_${activeProfileId}_`)) {
+      if (key?.startsWith(prefix)) {
         try {
-          const sessions = JSON.parse(localStorage.getItem(key));
-          if (Array.isArray(sessions)) allSessions.push(...sessions);
-        } catch (e) {}
+          const parsed = JSON.parse(localStorage.getItem(key));
+          if (Array.isArray(parsed)) allSessions.push(...parsed);
+        } catch {}
       }
     }
 
-    // Ordenar por fecha ascendente
-    allSessions.sort((a, b) => new Date(a.date) - new Date(b.date));
-
     const totalSessions = allSessions.length;
-
-    // Volumen total
     let totalVolume = 0;
+    const uniqueDaysSet = new Set();
+
     allSessions.forEach(session => {
-      const volume = session.exercises.reduce((sum, ex) =>
-        sum + ex.sets.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0), 0);
-      totalVolume += volume;
+      if (session.date) uniqueDaysSet.add(toISODateOnly(session.date));
+      if (Array.isArray(session.exercises)) {
+        session.exercises.forEach(ex => {
+          if (Array.isArray(ex.sets)) {
+            ex.sets.forEach(set => {
+              const w = parseFloat(set.weight) || 0;
+              const r = parseInt(set.repsDone || set.reps, 10) || 0;
+              totalVolume += (w * r);
+            });
+          }
+        });
+      }
     });
 
-    // Días únicos con entrenamiento
-    const uniqueDays = new Set();
-    allSessions.forEach(s => uniqueDays.add(getDateKey(s.date)));
-    const sortedDays = Array.from(uniqueDays).map(d => new Date(d)).sort((a, b) => a - b);
+    // Fechas únicas ordenadas como timestamps de medianoche local
+    const sortedDateTimestamps = Array.from(uniqueDaysSet)
+      .map(str => new Date(str + 'T00:00:00').getTime())
+      .sort((a, b) => a - b);
 
-    // Racha actual (desde hoy hacia atrás)
+    // Racha Actual
     let currentStreak = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let checkDate = new Date(today);
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const oneDayMs = 86400000;
 
-    // Si hoy no entrenó, miramos ayer
-    if (!uniqueDays.has(getDateKey(checkDate))) {
-      checkDate.setDate(checkDate.getDate() - 1);
+    let checkDay = todayMidnight;
+    if (!uniqueDaysSet.has(toISODateOnly(checkDay))) {
+      checkDay -= oneDayMs; // Si hoy no ha entrenado aún, verificar desde ayer
     }
 
-    while (uniqueDays.has(getDateKey(checkDate))) {
+    while (uniqueDaysSet.has(toISODateOnly(checkDay))) {
       currentStreak++;
-      checkDate.setDate(checkDate.getDate() - 1);
+      checkDay -= oneDayMs;
     }
 
-    // Mejor racha histórica
+    // Mejor Racha Histórica (Manejo de saltos de 1 día exacto con redondeo)
     let longestStreak = 0;
     let tempStreak = 0;
-    for (let i = 0; i < sortedDays.length; i++) {
+
+    for (let i = 0; i < sortedDateTimestamps.length; i++) {
       if (i === 0) {
         tempStreak = 1;
       } else {
-        const diff = (sortedDays[i] - sortedDays[i-1]) / (1000 * 60 * 60 * 24);
-        if (diff === 1) {
+        const diffDays = Math.round((sortedDateTimestamps[i] - sortedDateTimestamps[i - 1]) / oneDayMs);
+        if (diffDays === 1) {
           tempStreak++;
-        } else {
+        } else if (diffDays > 1) {
           tempStreak = 1;
         }
       }
       longestStreak = Math.max(longestStreak, tempStreak);
     }
 
-    const newStats = { totalSessions, currentStreak, longestStreak, totalVolume };
-    setStats(newStats);
+    const calculatedStats = { totalSessions, currentStreak, longestStreak, totalVolume };
+    setStats(calculatedStats);
 
-    // Desbloquear logros
-    const savedAchievements = JSON.parse(localStorage.getItem(`achievements_${activeProfileId}`) || '[]');
-    const newUnlocked = [...savedAchievements];
+    const savedKey = `achievements_${activeProfileId}`;
+    const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
+    const newUnlocked = [...saved];
+
     ACHIEVEMENTS_LIST.forEach(ach => {
-      if (!newUnlocked.includes(ach.id) && ach.condition(newStats)) {
+      if (!newUnlocked.includes(ach.id) && ach.condition(calculatedStats)) {
         newUnlocked.push(ach.id);
       }
     });
-    if (newUnlocked.length > savedAchievements.length) {
-      localStorage.setItem(`achievements_${activeProfileId}`, JSON.stringify(newUnlocked));
+
+    if (newUnlocked.length > saved.length) {
+      localStorage.setItem(savedKey, JSON.stringify(newUnlocked));
     }
     setUnlocked(newUnlocked);
   }, [activeProfileId]);
 
   useEffect(() => {
     calculateStats();
-    // Escuchar el evento para refrescar cuando se termine un entrenamiento
     const handler = () => calculateStats();
     window.addEventListener('workoutFinished', handler);
     return () => window.removeEventListener('workoutFinished', handler);
   }, [calculateStats]);
 
-  const unlockedAchievements = ACHIEVEMENTS_LIST.filter(ach => unlocked.includes(ach.id));
-
   return {
-    totalSessions: stats.totalSessions,
-    currentStreak: stats.currentStreak,
-    longestStreak: stats.longestStreak,
-    totalVolume: stats.totalVolume,
-    unlockedAchievements,
+    ...stats,
+    unlockedAchievements: ACHIEVEMENTS_LIST.filter(a => unlocked.includes(a.id)),
     refresh: calculateStats,
   };
 }

@@ -1,6 +1,6 @@
 // src/components/BarcodeScanner.jsx
-import React, { useEffect, useRef, useState } from 'react';
-import { X, Camera, Zap, AlertCircle, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { X, Camera, Zap, RefreshCw } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 export default function BarcodeScanner({ onDetected, onClose }) {
@@ -10,11 +10,24 @@ export default function BarcodeScanner({ onDetected, onClose }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   const scannerRef = useRef(null);
+  const isDetectedRef = useRef(false);
   const scannerContainerId = 'lomecan-barcode-reader';
 
+  const stopAndClearScanner = useCallback(async () => {
+    if (scannerRef.current) {
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear();
+      } catch {}
+      scannerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
-    let html5QrCode = null;
     let isMounted = true;
+    isDetectedRef.current = false;
 
     const startScanner = async () => {
       try {
@@ -30,7 +43,7 @@ export default function BarcodeScanner({ onDetected, onClose }) {
           Html5QrcodeSupportedFormats.QR_CODE,
         ];
 
-        html5QrCode = new Html5Qrcode(scannerContainerId, {
+        const html5QrCode = new Html5Qrcode(scannerContainerId, {
           formatsToSupport,
           verbose: false,
         });
@@ -49,15 +62,14 @@ export default function BarcodeScanner({ onDetected, onClose }) {
         await html5QrCode.start(
           { facingMode: 'environment' },
           config,
-          (decodedText) => {
-            if (isMounted) {
+          async (decodedText) => {
+            if (isMounted && !isDetectedRef.current) {
+              isDetectedRef.current = true;
               if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-                navigator.vibrate(50);
+                try { navigator.vibrate(50); } catch {}
               }
-              html5QrCode
-                .stop()
-                .then(() => onDetected(decodedText))
-                .catch(() => onDetected(decodedText));
+              await stopAndClearScanner();
+              onDetected(decodedText);
             }
           },
           () => {}
@@ -70,11 +82,10 @@ export default function BarcodeScanner({ onDetected, onClose }) {
             if (capabilities && 'torch' in capabilities) {
               setHasTorch(true);
             }
-          } catch (e) {}
+          } catch {}
         }
       } catch (err) {
         if (isMounted) {
-          // Manejo limpio de cancelación de permisos sin saturar consola
           const isPermissionDismissed = 
             err?.name === 'NotAllowedError' || 
             err?.message?.includes('Permission dismissed') ||
@@ -90,21 +101,14 @@ export default function BarcodeScanner({ onDetected, onClose }) {
       }
     };
 
-    const timer = setTimeout(startScanner, 120);
+    const timer = setTimeout(startScanner, 150);
 
     return () => {
       isMounted = false;
       clearTimeout(timer);
-      if (scannerRef.current) {
-        try {
-          if (scannerRef.current.isScanning) {
-            scannerRef.current.stop().catch(() => {});
-          }
-          scannerRef.current.clear();
-        } catch (e) {}
-      }
+      stopAndClearScanner();
     };
-  }, [onDetected, retryCount]);
+  }, [onDetected, retryCount, stopAndClearScanner]);
 
   const toggleTorch = async () => {
     if (!scannerRef.current || !hasTorch) return;
@@ -114,14 +118,17 @@ export default function BarcodeScanner({ onDetected, onClose }) {
         advanced: [{ torch: nextState }],
       });
       setIsTorchOn(nextState);
-    } catch (e) {}
+    } catch {}
   };
 
   return (
     <div className="fixed inset-0 z-[120] bg-[#050507] flex flex-col items-center justify-between p-6 animate-fade-in select-none">
       
       {/* Barra superior con controles */}
-      <div className="w-full flex items-center justify-between z-20 pt-2">
+      <div 
+        className="w-full flex items-center justify-between z-20"
+        style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}
+      >
         <div className="flex items-center gap-2">
           {hasTorch && (
             <button
@@ -149,7 +156,6 @@ export default function BarcodeScanner({ onDetected, onClose }) {
 
       {/* Visor central del escáner */}
       <div className="w-full max-w-sm flex-1 flex flex-col items-center justify-center my-auto relative">
-        
         {error ? (
           <div className="luxury-card p-6 text-center space-y-4 max-w-xs animate-fade-in">
             <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-400">
@@ -197,7 +203,10 @@ export default function BarcodeScanner({ onDetected, onClose }) {
       </div>
 
       {/* Instrucciones inferiores */}
-      <div className="w-full text-center pb-4 z-20">
+      <div 
+        className="w-full text-center pb-4 z-20"
+        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <p className="text-white text-sm font-bold tracking-tight">
           Apunta al código de barras del producto
         </p>

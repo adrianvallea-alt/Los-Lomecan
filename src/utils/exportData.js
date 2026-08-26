@@ -1,6 +1,5 @@
 // src/utils/exportData.js
 
-// Función principal que recopila todos los datos del usuario
 export function getAllUserData(profileId) {
   const data = {
     exportedAt: new Date().toISOString(),
@@ -11,73 +10,78 @@ export function getAllUserData(profileId) {
     foodIntake: [],
   };
 
-  // 1. Peso
   const weightStr = localStorage.getItem(`weightLogs_${profileId}`);
   if (weightStr) {
-    try { data.weightLogs = JSON.parse(weightStr); } catch (e) {}
+    try { data.weightLogs = JSON.parse(weightStr) || []; } catch {}
   }
 
-  // 2. Medidas corporales
   const measuresStr = localStorage.getItem(`bodyMeasures_${profileId}`);
   if (measuresStr) {
     try {
       const parsed = JSON.parse(measuresStr);
       data.bodyMeasures = parsed.history || [];
-    } catch (e) {}
+    } catch {}
   }
 
-  // 3. Historial de entrenamientos (varias claves)
+  const prefix = `workoutHistory_${profileId}_`;
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && key.startsWith(`workoutHistory_${profileId}_`)) {
+    if (key?.startsWith(prefix)) {
       try {
         const sessions = JSON.parse(localStorage.getItem(key));
         if (Array.isArray(sessions)) {
           data.workoutHistory.push(...sessions);
         }
-      } catch (e) {}
+      } catch {}
     }
   }
 
-  // 4. Ingesta diaria de alimentos
   const intakeStr = localStorage.getItem(`dailyIntake_${profileId}`);
   if (intakeStr) {
-    try { data.foodIntake = JSON.parse(intakeStr); } catch (e) {}
+    try { data.foodIntake = JSON.parse(intakeStr) || []; } catch {}
   }
 
   return data;
 }
 
-// Formatear los datos a CSV (pestañas separadas por tipo)
+const escapeCsv = (val) => {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
 export function generateCSV(data) {
   let csv = '';
 
   // Peso
-  if (data.weightLogs.length > 0) {
-    csv += 'Peso\nFecha,Peso (kg)\n';
+  if (data.weightLogs?.length > 0) {
+    csv += '--- REGISTROS DE PESO ---\nFecha,Peso (kg)\n';
     data.weightLogs.forEach(entry => {
-      csv += `${entry.date},${entry.weight}\n`;
+      csv += `${escapeCsv(entry.date)},${entry.weight}\n`;
     });
     csv += '\n';
   }
 
   // Medidas
-  if (data.bodyMeasures.length > 0) {
-    csv += 'Medidas\nFecha,Pecho, Cintura, Cadera, Brazos, Muslos\n';
+  if (data.bodyMeasures?.length > 0) {
+    csv += '--- MEDIDAS CORPORALES ---\nFecha,Pecho,Cintura,Cadera,Brazos,Muslos\n';
     data.bodyMeasures.forEach(entry => {
-      csv += `${entry.date},${entry.chest || ''},${entry.waist || ''},${entry.hips || ''},${entry.arms || ''},${entry.thighs || ''}\n`;
+      csv += `${escapeCsv(entry.date)},${entry.chest || ''},${entry.waist || ''},${entry.hips || ''},${entry.arms || ''},${entry.thighs || ''}\n`;
     });
     csv += '\n';
   }
 
   // Entrenamientos
-  if (data.workoutHistory.length > 0) {
-    csv += 'Entrenamientos\nFecha, Rutina, Día, Ejercicio, Serie, Peso (kg), Reps\n';
+  if (data.workoutHistory?.length > 0) {
+    csv += '--- HISTORIAL DE ENTRENAMIENTOS ---\nFecha,Rutina,Dia,Ejercicio,Serie,Peso (kg),Reps,Completado\n';
     data.workoutHistory.forEach(session => {
-      const sessionDate = new Date(session.date).toISOString();
-      session.exercises.forEach(ex => {
-        ex.sets.forEach(set => {
-          csv += `${sessionDate},${session.routineId || ''},${session.dayIndex},${ex.name},${set.setNum},${set.weight},${set.reps}\n`;
+      const sessionDate = session.date ? new Date(session.date).toISOString() : '';
+      (session.exercises || []).forEach(ex => {
+        (ex.sets || []).forEach(set => {
+          csv += `${escapeCsv(sessionDate)},${escapeCsv(session.routineId || '')},${session.dayIndex ?? ''},${escapeCsv(ex.name)},${set.setNum || ''},${set.weight || 0},${set.repsDone || set.reps || 0},${Boolean(set.done)}\n`;
         });
       });
     });
@@ -85,19 +89,18 @@ export function generateCSV(data) {
   }
 
   // Comidas
-  if (data.foodIntake.length > 0) {
-    csv += 'Comidas\nFecha, Alimento, Gramos, Calorías, Proteínas, Carbohidratos, Grasas\n';
+  if (data.foodIntake?.length > 0) {
+    csv += '--- INGESTA DE COMIDAS ---\nFecha,Momento,Alimento,Gramos,Calorias (kcal),Proteina (g),Carbohidratos (g),Grasas (g)\n';
     data.foodIntake.forEach(entry => {
-      csv += `${entry.timestamp},${entry.foodName},${entry.grams},${entry.macros?.cal || 0},${entry.macros?.pro || 0},${entry.macros?.carb || 0},${entry.macros?.fat || 0}\n`;
+      csv += `${escapeCsv(entry.timestamp)},${escapeCsv(entry.mealType || '')},${escapeCsv(entry.foodName)},${entry.grams || 0},${entry.macros?.cal || 0},${entry.macros?.pro || 0},${entry.macros?.carb || 0},${entry.macros?.fat || 0}\n`;
     });
   }
 
   return csv;
 }
 
-// Descargar archivo
-export function downloadFile(content, filename, type = 'text/csv') {
-  const blob = new Blob(['\uFEFF' + content], { type }); // BOM para Excel
+export function downloadFile(content, filename, type = 'text/csv;charset=utf-8;') {
+  const blob = new Blob(['\uFEFF' + content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

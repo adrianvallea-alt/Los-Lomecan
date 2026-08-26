@@ -1,18 +1,14 @@
 // src/components/MealPlannerModal.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  X, Sparkles, Check, Clock, Plus, Zap, 
-  ShieldCheck, RefreshCw, Calendar, Flame
+  X, Sparkles, Check, Plus, Zap, 
+  ShieldCheck, RefreshCw
 } from 'lucide-react';
 
-// =========================================================================
-// BANCO DE MENÚS CON ROTACIÓN DE 7 DÍAS Y PLATILLOS INTERCAMBIABLES
-// =========================================================================
 const DAYS_OF_WEEK = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 const ROTATING_MENU_BANK = {
-  // LUNES
   1: [
     {
       meal: 'Desayuno',
@@ -29,7 +25,7 @@ const ROTATING_MENU_BANK = {
       title: 'Pechuga de pollo con Arroz y Aguacate',
       ingredients: [
         { name: 'Pechuga de pollo a la plancha', baseGramsPer1000kcal: 85, cal100: 165, pro: 31, carb: 0, fat: 3.6 },
-        { name: 'Arroz blanco o jazmín cocido', baseGramsPer1000kcal: 95, cal100: 130, pro: 2.7, carb: 28, fat: 0.3 },
+        { name: 'Arroz blanco cocido', baseGramsPer1000kcal: 95, cal100: 130, pro: 2.7, carb: 28, fat: 0.3 },
         { name: 'Aguacate Hass fresco', baseGramsPer1000kcal: 25, cal100: 160, pro: 2, carb: 9, fat: 15 },
         { name: 'Espinacas o ensalada verde', baseGramsPer1000kcal: 50, cal100: 23, pro: 2.9, carb: 3.6, fat: 0.4 }
       ]
@@ -39,7 +35,7 @@ const ROTATING_MENU_BANK = {
       title: 'Carne magra con Camote asado y Brócoli',
       ingredients: [
         { name: 'Carne magra de res / Ternera', baseGramsPer1000kcal: 75, cal100: 210, pro: 26, carb: 0, fat: 11 },
-        { name: 'Camote o batata al horno', baseGramsPer1000kcal: 90, cal100: 86, pro: 1.6, carb: 20, fat: 0.1 },
+        { name: 'Camote al horno', baseGramsPer1000kcal: 90, cal100: 86, pro: 1.6, carb: 20, fat: 0.1 },
         { name: 'Brócoli al vapor', baseGramsPer1000kcal: 60, cal100: 34, pro: 2.8, carb: 7, fat: 0.4 },
         { name: 'Aceite de oliva virgen', baseGramsPer1000kcal: 5, cal100: 884, pro: 0, carb: 0, fat: 100 }
       ]
@@ -54,8 +50,6 @@ const ROTATING_MENU_BANK = {
       ]
     }
   ],
-
-  // MARTES
   2: [
     {
       meal: 'Desayuno',
@@ -97,12 +91,10 @@ const ROTATING_MENU_BANK = {
       ]
     }
   ],
-
-  // MIÉRCOLES
   3: [
     {
       meal: 'Desayuno',
-      title: 'Tostadas de masa madre con Huevo pochado y Aguacate',
+      title: 'Tostadas de masa madre con Huevo y Aguacate',
       ingredients: [
         { name: 'Pan masa madre / integral', baseGramsPer1000kcal: 40, cal100: 250, pro: 9, carb: 49, fat: 2 },
         { name: 'Huevos enteros', baseGramsPer1000kcal: 50, cal100: 143, pro: 13, carb: 0.7, fat: 9.5 },
@@ -116,14 +108,14 @@ const ROTATING_MENU_BANK = {
       ingredients: [
         { name: 'Salmón fresco a la plancha', baseGramsPer1000kcal: 80, cal100: 208, pro: 20, carb: 0, fat: 13 },
         { name: 'Quinoa cocida', baseGramsPer1000kcal: 85, cal100: 120, pro: 4.4, carb: 21, fat: 1.9 },
-        { name: 'Espárragos trigueros al grill', baseGramsPer1000kcal: 60, cal100: 20, pro: 2.2, carb: 3.9, fat: 0.1 }
+        { name: 'Espárragos trigueros', baseGramsPer1000kcal: 60, cal100: 20, pro: 2.2, carb: 3.9, fat: 0.1 }
       ]
     },
     {
       meal: 'Cena',
       title: 'Pollo deshebrado con Papa cocida y Calabacitas',
       ingredients: [
-        { name: 'Pechuga de pollo cocida y deshebrada', baseGramsPer1000kcal: 85, cal100: 165, pro: 31, carb: 0, fat: 3.6 },
+        { name: 'Pechuga de pollo cocida', baseGramsPer1000kcal: 85, cal100: 165, pro: 31, carb: 0, fat: 3.6 },
         { name: 'Papa cocida al vapor', baseGramsPer1000kcal: 95, cal100: 87, pro: 1.9, carb: 20, fat: 0.1 },
         { name: 'Calabacita salteada', baseGramsPer1000kcal: 50, cal100: 17, pro: 1.2, carb: 3.1, fat: 0.3 },
         { name: 'Aceite de oliva virgen', baseGramsPer1000kcal: 5, cal100: 884, pro: 0, carb: 0, fat: 100 }
@@ -133,14 +125,12 @@ const ROTATING_MENU_BANK = {
       meal: 'Snack',
       title: 'Pudding de Chía con Proteína y Arándanos',
       ingredients: [
-        { name: 'Semillas de chía hidratadas', baseGramsPer1000kcal: 15, cal100: 486, pro: 17, carb: 42, fat: 31 },
+        { name: 'Semillas de chía', baseGramsPer1000kcal: 15, cal100: 486, pro: 17, carb: 42, fat: 31 },
         { name: 'Proteína whey', baseGramsPer1000kcal: 12, cal100: 380, pro: 80, carb: 5, fat: 4 },
         { name: 'Frutos rojos mixtos', baseGramsPer1000kcal: 40, cal100: 57, pro: 0.7, carb: 14, fat: 0.3 }
       ]
     }
   ],
-
-  // JUEVES
   4: [
     {
       meal: 'Desayuno',
@@ -158,7 +148,7 @@ const ROTATING_MENU_BANK = {
       ingredients: [
         { name: 'Lomo de cerdo magro al horno', baseGramsPer1000kcal: 80, cal100: 145, pro: 28, carb: 0, fat: 3.5 },
         { name: 'Arroz blanco cocido', baseGramsPer1000kcal: 95, cal100: 130, pro: 2.7, carb: 28, fat: 0.3 },
-        { name: 'Champiñones salteados con ajo', baseGramsPer1000kcal: 50, cal100: 22, pro: 3.1, carb: 3.3, fat: 0.3 },
+        { name: 'Champiñones salteados', baseGramsPer1000kcal: 50, cal100: 22, pro: 3.1, carb: 3.3, fat: 0.3 },
         { name: 'Aceite de oliva virgen', baseGramsPer1000kcal: 5, cal100: 884, pro: 0, carb: 0, fat: 100 }
       ]
     },
@@ -182,8 +172,6 @@ const ROTATING_MENU_BANK = {
       ]
     }
   ],
-
-  // VIERNES
   5: [
     {
       meal: 'Desayuno',
@@ -197,7 +185,7 @@ const ROTATING_MENU_BANK = {
     },
     {
       meal: 'Comida',
-      title: 'Pechuga de Pollo al limón con Pasta y Aceitunas',
+      title: 'Pechuga de Pollo al limón con Pasta y Vegetales',
       ingredients: [
         { name: 'Pechuga de pollo a la plancha', baseGramsPer1000kcal: 85, cal100: 165, pro: 31, carb: 0, fat: 3.6 },
         { name: 'Pasta cocida', baseGramsPer1000kcal: 90, cal100: 131, pro: 5, carb: 25, fat: 1.1 },
@@ -223,12 +211,10 @@ const ROTATING_MENU_BANK = {
       ]
     }
   ],
-
-  // SÁBADO
   6: [
     {
       meal: 'Desayuno',
-      title: 'Huevos a la mexicana con Tortillas de maíz y Frijoles',
+      title: 'Huevos con Tortillas de maíz y Frijoles',
       ingredients: [
         { name: 'Huevos enteros', baseGramsPer1000kcal: 50, cal100: 143, pro: 13, carb: 0.7, fat: 9.5 },
         { name: 'Claras de huevo', baseGramsPer1000kcal: 50, cal100: 52, pro: 11, carb: 0.7, fat: 0.2 },
@@ -240,17 +226,17 @@ const ROTATING_MENU_BANK = {
       meal: 'Comida',
       title: 'Carne asada magra con Papa asada y Nopalitos',
       ingredients: [
-        { name: 'Carne de res magra (Sirloin/Arrachera magra)', baseGramsPer1000kcal: 80, cal100: 200, pro: 27, carb: 0, fat: 10 },
+        { name: 'Carne de res magra (Sirloin)', baseGramsPer1000kcal: 80, cal100: 200, pro: 27, carb: 0, fat: 10 },
         { name: 'Papa asada con piel', baseGramsPer1000kcal: 95, cal100: 87, pro: 1.9, carb: 20, fat: 0.1 },
-        { name: 'Nopales asados con cebollitas', baseGramsPer1000kcal: 60, cal100: 16, pro: 1.4, carb: 3.3, fat: 0.2 },
+        { name: 'Nopales asados', baseGramsPer1000kcal: 60, cal100: 16, pro: 1.4, carb: 3.3, fat: 0.2 },
         { name: 'Aguacate Hass', baseGramsPer1000kcal: 20, cal100: 160, pro: 2, carb: 9, fat: 15 }
       ]
     },
     {
       meal: 'Cena',
-      title: 'Tacos de Pechuga de Pollo con Pico de gallo',
+      title: 'Fajitas de Pollo con Tortillas y Verduras',
       ingredients: [
-        { name: 'Pechuga de pollo cocida en fajitas', baseGramsPer1000kcal: 85, cal100: 165, pro: 31, carb: 0, fat: 3.6 },
+        { name: 'Pechuga de pollo cocida', baseGramsPer1000kcal: 85, cal100: 165, pro: 31, carb: 0, fat: 3.6 },
         { name: 'Tortillas de maíz', baseGramsPer1000kcal: 35, cal100: 218, pro: 5.7, carb: 45, fat: 2.8 },
         { name: 'Pico de gallo y lechuga', baseGramsPer1000kcal: 40, cal100: 20, pro: 1, carb: 4, fat: 0.2 }
       ]
@@ -265,8 +251,6 @@ const ROTATING_MENU_BANK = {
       ]
     }
   ],
-
-  // DOMINGO
   0: [
     {
       meal: 'Desayuno',
@@ -281,7 +265,7 @@ const ROTATING_MENU_BANK = {
     },
     {
       meal: 'Comida',
-      title: 'Pechuga de Pavo al romero con Camote y Ensalada mixta',
+      title: 'Pechuga de Pavo con Camote y Ensalada mixta',
       ingredients: [
         { name: 'Pechuga de pavo al horno', baseGramsPer1000kcal: 85, cal100: 135, pro: 30, carb: 0, fat: 1 },
         { name: 'Camote horneado', baseGramsPer1000kcal: 95, cal100: 86, pro: 1.6, carb: 20, fat: 0.1 },
@@ -311,18 +295,13 @@ const ROTATING_MENU_BANK = {
   ]
 };
 
-export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, onClose }) {
-  const currentDayIndex = new Date().getDay(); // 0 a 6
+export default memo(function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, onClose }) {
+  const currentDayIndex = new Date().getDay();
   const [selectedDay, setSelectedDay] = useState(currentDayIndex);
   const [shuffleKey, setShuffleKey] = useState(0);
   const [addedMeals, setAddedMeals] = useState({});
 
   const targetCal = goals?.cal || 2200;
-  const targetPro = goals?.pro || 140;
-  const targetCarb = goals?.carb || 240;
-  const targetFat = goals?.fat || 60;
-
-  // Factor de escala exacto según las calorías del usuario
   const scaleMultiplier = targetCal / 1000;
 
   const activeDayMeals = useMemo(() => {
@@ -371,20 +350,18 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
     });
   }, [selectedDay, scaleMultiplier, shuffleKey]);
 
-  // Barajar / Cambiar de día aleatorio
   const handleShuffle = () => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(25);
+      try { navigator.vibrate(25); } catch {}
     }
     setSelectedDay(prev => (prev + 1) % 7);
     setShuffleKey(prev => prev + 1);
     setAddedMeals({});
   };
 
-  // Añadir una sola comida
   const handleAddSingle = (mealObj, idx) => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate(30);
+      try { navigator.vibrate(30); } catch {}
     }
 
     let mealTypeKey = 'comida';
@@ -407,10 +384,9 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
     setAddedMeals(prev => ({ ...prev, [idx]: true }));
   };
 
-  // Cargar todo el día completo
   const handleApplyAll = () => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      navigator.vibrate([40, 30, 80]);
+      try { navigator.vibrate([40, 30, 80]); } catch {}
     }
 
     const itemsToInject = activeDayMeals.map((mealObj, idx) => {
@@ -449,7 +425,7 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
       >
         <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mt-3 sm:hidden shrink-0" />
 
-        {/* Cabecera con selector de día y botón barajar */}
+        {/* Cabecera */}
         <div className="px-6 pt-4 pb-3 flex items-start justify-between border-b border-white/[0.06] shrink-0">
           <div>
             <div className="flex items-center gap-2">
@@ -464,7 +440,6 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* Botón Barajar */}
             <button 
               onClick={handleShuffle}
               className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[#D4FF00] hover:bg-[#D4FF00]/10 flex items-center gap-1 text-xs font-bold transition-all active:scale-90"
@@ -474,13 +449,13 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
               <span className="text-[10px] uppercase font-mono">Rotar</span>
             </button>
 
-            <button onClick={onClose} className="p-2 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white">
+            <button onClick={onClose} className="p-2 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white" aria-label="Cerrar">
               <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* Selector de Días de la Semana */}
+        {/* Selector de Días */}
         <div className="px-6 py-2.5 bg-black/40 border-b border-white/[0.04] shrink-0 overflow-x-auto no-scrollbar">
           <div className="flex gap-1.5 w-max">
             {DAYS_OF_WEEK.map((dayName, idx) => (
@@ -492,7 +467,7 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
                 }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all ${
                   selectedDay === idx
-                    ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_12px_rgba(212,255,0,0.35)]'
+                    ? 'bg-[#D4FF00] text-[#09090B] shadow-[0_0_12px_rgba(212,255,0,0.35)] font-black'
                     : 'bg-white/[0.03] text-zinc-400 hover:text-white'
                 }`}
               >
@@ -502,9 +477,8 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
           </div>
         </div>
 
-        {/* Lista de Comidas del Día */}
+        {/* Lista de Comidas */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
-          
           <div className="bg-[#D4FF00]/[0.02] border border-[#D4FF00]/25 rounded-2xl p-3 flex items-center justify-between text-xs font-mono">
             <span className="text-zinc-300 flex items-center gap-1.5">
               <ShieldCheck size={14} className="text-[#D4FF00]" /> Menú: <strong>{DAYS_OF_WEEK[selectedDay]}</strong>
@@ -533,7 +507,6 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
 
                   <p className="text-xs font-bold text-white font-sans">{mealObj.title}</p>
                   
-                  {/* Desglose de Ingredientes con GRAMOS EXACTOS */}
                   <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-xl space-y-1.5">
                     <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">
                       Gramajes exactos a preparar:
@@ -546,7 +519,6 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
                     ))}
                   </div>
 
-                  {/* Botón individual */}
                   <div className="pt-1 flex justify-end">
                     <button
                       onClick={() => handleAddSingle(mealObj, idx)}
@@ -574,11 +546,14 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
           </div>
         </div>
 
-        {/* Botón para cargar todo el día completo */}
-        <div className="p-4 bg-[#0A0A0F] border-t border-white/[0.06] shrink-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 16px) + 16px)' }}>
+        {/* Botón Inferior */}
+        <div 
+          className="p-4 bg-[#0A0A0F] border-t border-white/[0.06] shrink-0" 
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           <button
             onClick={handleApplyAll}
-            className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,255,0,0.35)] active:scale-95"
+            className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,255,0,0.35)] active:scale-95 font-mono"
           >
             <Zap size={16} />
             Cargar Menú Completo de {DAYS_OF_WEEK[selectedDay]}
@@ -588,4 +563,4 @@ export default function MealPlannerModal({ goals, onApplyPlan, onAddSingleMeal, 
     </div>,
     document.body
   );
-}
+});

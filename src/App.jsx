@@ -1,5 +1,6 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import ProfileSelection from './components/ProfileSelection';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/Dashboard';
@@ -35,8 +36,12 @@ const uniqueById = (arr) => Array.from(new Map(arr.map(p => [p.id, p])).values()
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState(() => {
-    const saved = localStorage.getItem('lastActiveProfile');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('lastActiveProfile');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [currentTab, setCurrentTab] = useState('hoy');
@@ -52,11 +57,42 @@ export default function App() {
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
   const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
-  // Cargar perfiles
+  // 1. Control del Botón Físico de Retroceso (Android)
   useEffect(() => {
+    let backListener;
+    const registerBackHandler = async () => {
+      try {
+        backListener = await CapApp.addListener('backButton', () => {
+          if (showOnboarding) {
+            setShowOnboarding(false);
+          } else if (showProfileManager) {
+            setShowProfileManager(false);
+          } else if (openLibrary) {
+            setOpenLibrary(false);
+          } else if (currentTab !== 'hoy') {
+            setCurrentTab('hoy');
+          } else {
+            CapApp.exitApp();
+          }
+        });
+      } catch (err) {
+        // En entorno Web no Capacitor, se ignora silenciosamente
+      }
+    };
+
+    registerBackHandler();
+    return () => {
+      if (backListener) backListener.remove();
+    };
+  }, [showOnboarding, showProfileManager, openLibrary, currentTab]);
+
+  // 2. Cargar perfiles
+  useEffect(() => {
+    let isMounted = true;
     const loadProfiles = async () => {
       try {
         const list = await fetchProfiles();
+        if (!isMounted) return;
         const cleaned = uniqueById(list && list.length > 0 ? list : DEFAULT_PROFILES);
         setProfiles(cleaned);
 
@@ -67,77 +103,86 @@ export default function App() {
             localStorage.setItem('lastActiveProfile', JSON.stringify(fresh));
           }
         }
-      } catch (err) {
+      } catch {
+        if (!isMounted) return;
         const saved = localStorage.getItem('userProfiles') || localStorage.getItem('profilesCache');
         setProfiles(saved ? uniqueById(JSON.parse(saved)) : DEFAULT_PROFILES);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     loadProfiles();
+    return () => { isMounted = false; };
   }, []);
 
-  const handleSelectProfile = (profile) => {
+  const handleSelectProfile = useCallback((profile) => {
     setActiveProfile(profile);
     localStorage.setItem('lastActiveProfile', JSON.stringify(profile));
-  };
+  }, []);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     setActiveProfile(null);
     localStorage.removeItem('lastActiveProfile');
-  };
+  }, []);
 
-  // Cargar rutinas
+  // 3. Cargar rutinas (Dependencia exacta por ID)
   useEffect(() => {
-    if (!activeProfile) {
+    if (!activeProfile?.id) {
       setRoutines([]);
       return;
     }
 
+    let isMounted = true;
     const loadRoutines = async () => {
       try {
         const userRoutines = await fetchUserRoutines(activeProfile.id);
-        setRoutines(userRoutines || []);
-      } catch (err) {
+        if (isMounted) setRoutines(userRoutines || []);
+      } catch {
+        if (!isMounted) return;
         const cached = localStorage.getItem(`userRoutines_${activeProfile.id}`);
         setRoutines(cached ? JSON.parse(cached) : []);
       }
     };
     loadRoutines();
-  }, [activeProfile]);
+    return () => { isMounted = false; };
+  }, [activeProfile?.id]);
 
-  // Cargar ingesta diaria
+  // 4. Cargar ingesta diaria (Dependencia exacta por ID)
   useEffect(() => {
-    if (!activeProfile) return;
+    if (!activeProfile?.id) return;
+    let isMounted = true;
     const loadData = async () => {
       try {
         const supabaseIntake = await fetchDailyIntake(activeProfile.id);
-        setDailyIntake(supabaseIntake || []);
-      } catch (err) {
-        setDailyIntake(JSON.parse(localStorage.getItem(`dailyIntake_${activeProfile.id}`) || '[]'));
+        if (isMounted) setDailyIntake(supabaseIntake || []);
+      } catch {
+        if (isMounted) {
+          setDailyIntake(JSON.parse(localStorage.getItem(`dailyIntake_${activeProfile.id}`) || '[]'));
+        }
       }
     };
     loadData();
-  }, [activeProfile]);
+    return () => { isMounted = false; };
+  }, [activeProfile?.id]);
 
-  // Calibración inicial si faltan datos
+  // 5. Calibración inicial si faltan datos
   useEffect(() => {
-    if (activeProfile && activeProfile.id && !activeProfile.id.startsWith('temp_')) {
+    if (activeProfile?.id && !activeProfile.id.startsWith('temp_')) {
       const needsOnboarding = !activeProfile.weight || !activeProfile.height || !activeProfile.age;
       setShowOnboarding(needsOnboarding);
     }
-  }, [activeProfile]);
+  }, [activeProfile?.id, activeProfile?.weight, activeProfile?.height, activeProfile?.age]);
 
-  const updateRoutines = async (newRoutines) => {
+  const updateRoutines = useCallback(async (newRoutines) => {
     setRoutines(newRoutines);
-    if (!activeProfile) return;
+    if (!activeProfile?.id) return;
 
     localStorage.setItem(`userRoutines_${activeProfile.id}`, JSON.stringify(newRoutines));
 
     for (const routine of newRoutines) {
       try {
         await saveUserRoutine(activeProfile.id, routine);
-      } catch (err) {
+      } catch {
         addToQueue('saveRoutine', { profileId: activeProfile.id, routine });
       }
     }
@@ -147,32 +192,36 @@ export default function App() {
       if (!existingIds.has(routine.id)) {
         try {
           await deleteUserRoutine(activeProfile.id, routine.id, false);
-        } catch (err) {
-          console.warn('Error al eliminar rutina:', err);
+        } catch {
+          addToQueue('deleteRoutine', { profileId: activeProfile.id, id: routine.id });
         }
       }
     }
-  };
+  }, [activeProfile?.id, routines, addToQueue]);
 
-  const addFoodToDay = async (food, grams) => {
+  const addFoodToDay = useCallback(async (food, grams) => {
+    const base = Number(food.base_g) || 100;
+    const g = Number(grams) || 100;
+    const ratio = g / base;
+
     const newEntry = {
       id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       foodId: food.id || null,
       foodName: food.name,
-      grams,
+      grams: g,
       mealType: food.mealType || null,
       macros: {
-        cal: Math.round(((food.cal || 0) * grams) / (food.base_g || 100)),
-        pro: parseFloat((((food.pro || 0) * grams) / (food.base_g || 100)).toFixed(1)),
-        carb: parseFloat((((food.carb || 0) * grams) / (food.base_g || 100)).toFixed(1)),
-        fat: parseFloat((((food.fat || 0) * grams) / (food.base_g || 100)).toFixed(1)),
+        cal: Math.round((Number(food.cal) || 0) * ratio),
+        pro: parseFloat(((Number(food.pro) || 0) * ratio).toFixed(1)),
+        carb: parseFloat(((Number(food.carb) || 0) * ratio).toFixed(1)),
+        fat: parseFloat(((Number(food.fat) || 0) * ratio).toFixed(1)),
       },
       timestamp: new Date().toISOString(),
     };
 
     setDailyIntake(prev => [newEntry, ...prev]);
 
-    if (activeProfile) {
+    if (activeProfile?.id) {
       const key = `dailyIntake_${activeProfile.id}`;
       const stored = JSON.parse(localStorage.getItem(key) || '[]');
       stored.unshift(newEntry);
@@ -183,16 +232,16 @@ export default function App() {
         if (saved?.id) {
           setDailyIntake(prev => prev.map(i => i.id === newEntry.id ? { ...i, id: saved.id } : i));
         }
-      } catch (e) {
+      } catch {
         addToQueue('saveFood', { profileId: activeProfile.id, ...newEntry });
       }
     }
-  };
+  }, [activeProfile?.id, addToQueue]);
 
-  const deleteFoodFromDay = async (entryId) => {
+  const deleteFoodFromDay = useCallback(async (entryId) => {
     setDailyIntake(prev => prev.filter(item => item.id !== entryId));
 
-    if (activeProfile) {
+    if (activeProfile?.id) {
       const key = `dailyIntake_${activeProfile.id}`;
       const stored = JSON.parse(localStorage.getItem(key) || '[]');
       const updated = stored.filter(item => item.id !== entryId);
@@ -200,13 +249,13 @@ export default function App() {
 
       try {
         await deleteDailyIntakeItem(activeProfile.id, entryId);
-      } catch (e) {
-        addToQueue('deleteFood', { id: entryId });
+      } catch {
+        addToQueue('deleteFood', { id: entryId, profileId: activeProfile.id });
       }
     }
-  };
+  }, [activeProfile?.id, addToQueue]);
 
-  const handleUpdateProfile = async (updatedProfile) => {
+  const handleUpdateProfile = useCallback(async (updatedProfile) => {
     const validId = updatedProfile.id || updatedProfile.name.toLowerCase().replace(/[^a-z0-9]/g, '') || `user_${Date.now()}`;
     const profileWithId = {
       ...updatedProfile,
@@ -214,19 +263,20 @@ export default function App() {
       goals: updatedProfile.goals || { cal: 2000, pro: 120, carb: 200, fat: 55 }
     };
 
-    const exists = profiles.some(p => p.id === profileWithId.id);
-    const updatedList = exists
-      ? profiles.map(p => p.id === profileWithId.id ? profileWithId : p)
-      : [...profiles, profileWithId];
-
-    const cleaned = uniqueById(updatedList);
-    setProfiles(cleaned);
-    localStorage.setItem('userProfiles', JSON.stringify(cleaned));
-    localStorage.setItem('profilesCache', JSON.stringify(cleaned));
+    setProfiles(prev => {
+      const exists = prev.some(p => p.id === profileWithId.id);
+      const updatedList = exists
+        ? prev.map(p => p.id === profileWithId.id ? profileWithId : p)
+        : [...prev, profileWithId];
+      const cleaned = uniqueById(updatedList);
+      localStorage.setItem('userProfiles', JSON.stringify(cleaned));
+      localStorage.setItem('profilesCache', JSON.stringify(cleaned));
+      return cleaned;
+    });
 
     try {
       await updateProfile(profileWithId);
-    } catch (e) {
+    } catch {
       addToQueue('updateProfile', profileWithId);
     }
 
@@ -234,9 +284,9 @@ export default function App() {
       setActiveProfile(profileWithId);
       localStorage.setItem('lastActiveProfile', JSON.stringify(profileWithId));
     }
-  };
+  }, [activeProfile, addToQueue]);
 
-  const handleAddNewProfile = () => {
+  const handleAddNewProfile = useCallback(() => {
     const tempId = `temp_${Date.now()}`;
     const newEmptyProfile = {
       id: tempId,
@@ -253,9 +303,9 @@ export default function App() {
     };
     setActiveProfile(newEmptyProfile);
     setShowOnboarding(true);
-  };
+  }, []);
 
-  const currentRoutine = routines.find(r => r.is_active === true);
+  const currentRoutine = useMemo(() => routines.find(r => r.is_active === true), [routines]);
   const pendingWorkout = Boolean(currentRoutine);
 
   if (loading) {
@@ -300,11 +350,15 @@ export default function App() {
       <OnboardingWizard
         initialName={activeProfile?.name || ''}
         onCancel={() => {
-          const saved = localStorage.getItem('lastActiveProfile');
-          const lastProf = saved ? JSON.parse(saved) : null;
-          if (lastProf && profiles.some(p => p.id === lastProf.id)) {
-            setActiveProfile(lastProf);
-          } else {
+          try {
+            const saved = localStorage.getItem('lastActiveProfile');
+            const lastProf = saved ? JSON.parse(saved) : null;
+            if (lastProf && profiles.some(p => p.id === lastProf.id)) {
+              setActiveProfile(lastProf);
+            } else {
+              setActiveProfile(null);
+            }
+          } catch {
             setActiveProfile(null);
           }
           setShowOnboarding(false);
@@ -327,79 +381,49 @@ export default function App() {
     );
   }
 
-  const renderContent = () => {
-    switch (currentTab) {
-      case 'hoy':
-        return (
-          <Dashboard
-            profile={activeProfile}
-            dailyIntake={dailyIntake}
-            weightLogs={weightLogs}
-            currentRoutine={currentRoutine}
-            onStartWorkout={() => setCurrentTab('gimnasio')}
-            onGoToRoutines={() => setCurrentTab('gimnasio')}
-            onGoToEvolution={() => setCurrentTab('evolucion')}
-            onAddFood={addFoodToDay}
-            onDeleteFood={deleteFoodFromDay}
-            onUpdateProfile={handleUpdateProfile}
-          />
-        );
-      case 'alimentos':
-        return <FoodCatalog onAddToDay={addFoodToDay} goals={activeProfile?.goals} />;
-      case 'gimnasio':
-        return (
-          <GymTracker
-            activeProfile={activeProfile}
-            routines={routines}
-            onUpdateRoutines={updateRoutines}
-            openLibrary={openLibrary}
-            onLibraryOpened={() => setOpenLibrary(false)}
-            addToQueue={addToQueue}
-          />
-        );
-      case 'evolucion':
-        return <EvolutionView activeProfile={activeProfile} />;
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className="min-h-[100dvh] bg-[#050507] flex justify-center font-sans relative overflow-hidden">
       <div className="w-full max-w-md bg-transparent relative flex flex-col h-[100dvh] z-10">
         
+        {/* Banner de Sincronización */}
         {queue.length > 0 && (
-          <div className="bg-[#D4FF00]/10 border-b border-[#D4FF00]/25 text-[#D4FF00] text-[10px] font-mono tracking-wider font-bold text-center py-1 z-30 backdrop-blur-xl flex items-center justify-center gap-1.5">
+          <div 
+            className="bg-[#D4FF00]/10 border-b border-[#D4FF00]/25 text-[#D4FF00] text-[10px] font-mono tracking-wider font-bold text-center py-1 z-30 backdrop-blur-xl flex items-center justify-center gap-1.5"
+            style={{ paddingTop: 'calc(0.25rem + env(safe-area-inset-top, 0px))' }}
+          >
             <Radio size={11} className="animate-pulse" />
             {isSyncing ? 'SINCRONIZANDO CON NUBE...' : `MODO OFFLINE · ${queue.length} CAMBIOS EN COLA`}
           </div>
         )}
 
-        {/* Header superior */}
-        <header className="px-5 pt-3.5 pb-2.5 flex justify-between items-center z-20 bg-[#050507]/80 backdrop-blur-2xl border-b border-white/[0.05] shrink-0">
+        {/* Header Superior con soporte para Notch */}
+        <header 
+          className="px-5 pb-2.5 flex justify-between items-center z-20 bg-[#050507]/80 backdrop-blur-2xl border-b border-white/[0.05] shrink-0"
+          style={{ paddingTop: queue.length > 0 ? '0.75rem' : 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
+        >
           <div className="flex items-center gap-3">
             <div className="relative w-9 h-9 rounded-full p-[1px] bg-gradient-to-b from-white/20 via-[#D4FF00]/40 to-transparent shadow-[0_0_12px_rgba(212,255,0,0.15)]">
               <div className="w-full h-full rounded-full overflow-hidden bg-[#0A0A0F] flex items-center justify-center">
-                {activeProfile.avatar?.startsWith('http') ? (
+                {activeProfile?.avatar?.startsWith('http') ? (
                   <img src={activeProfile.avatar} alt={activeProfile.name} className="w-full h-full object-cover" />
                 ) : (
-                  <span className="font-black text-xs text-white">{activeProfile.avatar || activeProfile.name?.charAt(0) || 'A'}</span>
+                  <span className="font-black text-xs text-white">{activeProfile?.avatar || activeProfile?.name?.charAt(0) || 'A'}</span>
                 )}
               </div>
             </div>
 
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile.name || 'Atleta'}</span>
+                <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile?.name || 'Atleta'}</span>
               </div>
               <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#D4FF00]/80 uppercase block">
-                {activeProfile.role || 'ATLETA PRO'}
+                {activeProfile?.role || 'ATLETA PRO'}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {activeProfile.id === 'adrian' && (
+            {activeProfile?.id === 'adrian' && (
               <>
                 <button
                   onClick={() => setShowProfileManager(true)}
@@ -431,9 +455,41 @@ export default function App() {
         </header>
 
         {/* Vista activa */}
-        <div className="flex-1 overflow-y-auto flex flex-col overscroll-none touch-pan-y no-scrollbar">
-          {renderContent()}
-        </div>
+        <main className="flex-1 overflow-y-auto flex flex-col overscroll-none touch-pan-y no-scrollbar">
+          {currentTab === 'hoy' && (
+            <Dashboard
+              profile={activeProfile}
+              dailyIntake={dailyIntake}
+              weightLogs={weightLogs}
+              currentRoutine={currentRoutine}
+              onStartWorkout={() => setCurrentTab('gimnasio')}
+              onGoToRoutines={() => setCurrentTab('gimnasio')}
+              onGoToEvolution={() => setCurrentTab('evolucion')}
+              onAddFood={addFoodToDay}
+              onDeleteFood={deleteFoodFromDay}
+              onUpdateProfile={handleUpdateProfile}
+            />
+          )}
+
+          {currentTab === 'alimentos' && (
+            <FoodCatalog onAddToDay={addFoodToDay} goals={activeProfile?.goals} />
+          )}
+
+          {currentTab === 'gimnasio' && (
+            <GymTracker
+              activeProfile={activeProfile}
+              routines={routines}
+              onUpdateRoutines={updateRoutines}
+              openLibrary={openLibrary}
+              onLibraryOpened={() => setOpenLibrary(false)}
+              addToQueue={addToQueue}
+            />
+          )}
+
+          {currentTab === 'evolucion' && (
+            <EvolutionView activeProfile={activeProfile} />
+          )}
+        </main>
 
         {/* Navegación inferior */}
         <BottomNav

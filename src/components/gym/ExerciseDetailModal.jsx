@@ -23,7 +23,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [videoSrc, setVideoSrc] = useState(exercise.video_url || null);
   const [isLocalCached, setIsLocalCached] = useState(false);
-  const [videoError, setVideoError] = useState(false);
 
   const isYouTube = exercise.video_url?.includes('youtube.com') || exercise.video_url?.includes('youtu.be');
   const youtubeId = isYouTube ? getYouTubeId(exercise.video_url) : null;
@@ -39,7 +38,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
     };
   }, []);
 
-  // Auto-cargar desde caché local o reproducir en segundo plano
   useEffect(() => {
     let active = true;
     let localBlobUrl = null;
@@ -66,9 +64,8 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
     };
   }, [exercise.video_url, isYouTube]);
 
-  // URL de YouTube limpia sin controles ni botones de pausa/volumen
   const youtubeEmbedUrl = youtubeId
-    ? `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&disablekb=1&playsinline=1`
+    ? `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&modestbranding=1&rel=0`
     : '';
 
   return ReactDOM.createPortal(
@@ -77,10 +74,9 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-lg bg-[#0A0A0C] border border-[#D4FF00]/30 sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col max-h-[90dvh] overflow-hidden shadow-2xl shadow-black/80 animate-fade-in-up"
+        className="w-full sm:max-w-lg bg-[#0A0A0C] border border-[#D4FF00]/30 sm:rounded-[2.5rem] rounded-t-[2.5rem] flex flex-col max-h-[90dvh] overflow-hidden shadow-2xl shadow-black/80 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Barra táctil móvil */}
         <div className="w-12 h-1 bg-white/15 rounded-full mx-auto mt-3 sm:hidden shrink-0" />
 
         {/* Cabecera */}
@@ -112,7 +108,7 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
           </button>
         </div>
 
-        {/* Pestañas de Navegación */}
+        {/* Pestañas */}
         <div className="px-6 py-2.5 bg-black/40 border-b border-white/[0.04] flex items-center justify-between shrink-0">
           <div className="flex gap-2">
             <button
@@ -137,7 +133,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
             </button>
           </div>
 
-          {/* Estado de conexión */}
           <div className="flex items-center gap-1.5 text-[10px] font-mono font-semibold">
             {isLocalCached ? (
               <span className="flex items-center gap-1 text-[#D4FF00]">
@@ -157,8 +152,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
 
         {/* Contenido */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 no-scrollbar">
-          
-          {/* PESTAÑA: DEMOSTRACIÓN (VIDEO LIMPIO SIN BOTONES) */}
           {activeTab === 'demo' && (
             <div className="space-y-3 animate-fade-in">
               {exercise.video_url ? (
@@ -180,13 +173,11 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
                           src={youtubeEmbedUrl}
                           title={`Video de ${exercise.name}`}
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          className="absolute inset-0 w-full h-full"
-                          onError={() => setVideoError(true)}
+                          className="absolute inset-0 w-full h-full border-0"
                         />
                       </div>
                     )
                   ) : (
-                    /* Video HTML5 completamente limpio sin barra ni botones */
                     <video
                       key={videoSrc}
                       src={videoSrc}
@@ -195,7 +186,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
                       loop
                       playsInline
                       className="w-full max-h-80 object-cover pointer-events-none"
-                      onError={() => setVideoError(true)}
                     />
                   )}
                 </div>
@@ -208,7 +198,6 @@ export default function ExerciseDetailModal({ exercise, onClose }) {
             </div>
           )}
 
-          {/* PESTAÑA: TÉCNICA */}
           {activeTab === 'technique' && (
             <div className="space-y-4 animate-fade-in">
               <div className="luxury-card p-4 space-y-2">
