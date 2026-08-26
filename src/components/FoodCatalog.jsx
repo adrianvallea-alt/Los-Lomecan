@@ -1,8 +1,8 @@
 // src/components/FoodCatalog.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
-  Search, Plus, X, Sparkles, Barcode, Scale, Edit3, Check, Zap, Lightbulb,
+  Search, Plus, X, Sparkles, Barcode, Scale, Edit3, Check, Lightbulb,
   Minus, AlertCircle, Database, ChefHat
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
@@ -25,11 +25,10 @@ const MEAL_OPTIONS = [
 
 const triggerHaptic = (ms = 25) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(ms); } catch (e) {}
+    try { navigator.vibrate(ms); } catch {}
   }
 };
 
-// Función precisa para identificar si un alimento fue creado por el usuario
 const isCustomFood = (f) => {
   if (!f) return false;
   if (f.is_custom === true) return true;
@@ -43,7 +42,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
   const [foods, setFoods] = useState([]);
   const [search, setSearch] = useState('');
   
-  // Pestaña activa: 'global' (Base de Datos) | 'custom' (Mis Alimentos Creados)
+  // Pestañas: 'global' (Base de Datos) | 'custom' (Mis Alimentos Creados / Escaneados)
   const [sourceTab, setSourceTab] = useState('global');
   const [activeFilter, setActiveFilter] = useState('all');
   
@@ -57,7 +56,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
   const [editingFood, setEditingFood] = useState(null);
   const [notFoundBarcode, setNotFoundBarcode] = useState(null);
 
-  // Formulario de creación
+  // Formulario
   const [customName, setCustomName] = useState('');
   const [customBrand, setCustomBrand] = useState('Casero');
   const [customCal, setCustomCal] = useState('');
@@ -66,8 +65,8 @@ export default function FoodCatalog({ onAddToDay, goals }) {
   const [customFat, setCustomFat] = useState('');
   const [customBarcode, setCustomBarcode] = useState('');
 
-  // Cargar catálogo y alimentos creados locales
-  const loadAllFoods = async () => {
+  // Cargar catálogo y alimentos locales
+  const loadAllFoods = useCallback(async () => {
     setLoading(true);
     try {
       const localCustom = JSON.parse(localStorage.getItem('userCustomFoods') || '[]');
@@ -75,7 +74,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
       const cached = localStorage.getItem('foodsCache');
       if (cached) {
-        baseList = JSON.parse(cached);
+        try { baseList = JSON.parse(cached); } catch {}
       }
 
       if (navigator.onLine) {
@@ -91,7 +90,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         }
       }
 
-      // Combinar base de datos con los alimentos creados por el usuario
       const merged = Array.from(
         new Map([...baseList, ...localCustom].map(item => [item.id || item.barcode || item.name, item])).values()
       );
@@ -102,11 +100,11 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAllFoods();
-  }, []);
+  }, [loadAllFoods]);
 
   // Búsqueda en tiempo real
   useEffect(() => {
@@ -115,6 +113,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
       return;
     }
 
+    let isCurrent = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       const query = search.trim().toLowerCase();
@@ -126,7 +125,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         
         const allCached = [...(cached ? JSON.parse(cached) : []), ...localCustom];
         localMatches = allCached.filter(f =>
-          f.name.toLowerCase().includes(query) || (f.brand && f.brand.toLowerCase().includes(query))
+          f.name?.toLowerCase().includes(query) || (f.brand && f.brand.toLowerCase().includes(query))
         );
 
         if (navigator.onLine && sourceTab === 'global') {
@@ -142,25 +141,30 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
           if (localMatches.length < 5) {
             const offResults = await searchFoods(query);
-            const combined = Array.from(
-              new Map([...localMatches, ...offResults].map(f => [f.name.toLowerCase(), f])).values()
-            );
-            setFoods(combined);
-            setLoading(false);
-            return;
+            if (isCurrent) {
+              const combined = Array.from(
+                new Map([...localMatches, ...offResults].map(f => [f.name?.toLowerCase(), f])).values()
+              );
+              setFoods(combined);
+              setLoading(false);
+              return;
+            }
           }
         }
 
-        setFoods(localMatches);
+        if (isCurrent) setFoods(localMatches);
       } catch (e) {
         console.warn('Error en búsqueda de comida:', e);
       } finally {
-        setLoading(false);
+        if (isCurrent) setLoading(false);
       }
     }, 350);
 
-    return () => clearTimeout(timer);
-  }, [search, sourceTab]);
+    return () => {
+      isCurrent = false;
+      clearTimeout(timer);
+    };
+  }, [search, sourceTab, loadAllFoods]);
 
   // Auto-calcular calorías en el formulario (4*P + 4*C + 9*G)
   useEffect(() => {
@@ -187,33 +191,71 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     setSelectedGrams(100);
   };
 
+  // ✅ ESCÁNER: Guarda automáticamente el producto escaneado en "Mis Alimentos"
   const handleBarcode = async (code) => {
     setShowScanner(false);
     setLoading(true);
 
     try {
-      const { data: cached } = await supabase
-        .from('foods')
-        .select('*')
-        .eq('barcode', code)
-        .maybeSingle();
-
-      if (cached) {
-        handleSelectFood(cached);
+      // 1. Revisar si ya está guardado en "Mis Alimentos" localmente
+      const localCustom = JSON.parse(localStorage.getItem('userCustomFoods') || '[]');
+      const existingLocal = localCustom.find(f => f.barcode === code);
+      if (existingLocal) {
+        setSourceTab('custom');
+        handleSelectFood(existingLocal);
         setLoading(false);
         return;
       }
 
-      const remote = await getFoodByBarcode(code);
-      if (remote) {
-        const { data: saved } = await supabase
+      let foundFood = null;
+
+      // 2. Revisar base de datos Supabase
+      if (navigator.onLine) {
+        const { data: cached } = await supabase
           .from('foods')
-          .insert([remote])
-          .select()
-          .single();
-        const finalFood = saved || remote;
-        setFoods(prev => [finalFood, ...prev]);
-        handleSelectFood(finalFood);
+          .select('*')
+          .eq('barcode', code)
+          .maybeSingle();
+
+        if (cached) foundFood = cached;
+      }
+
+      // 3. Si no está en Supabase, consultar OpenFoodFacts
+      if (!foundFood) {
+        const remote = await getFoodByBarcode(code);
+        if (remote) {
+          foundFood = remote;
+          if (navigator.onLine) {
+            try {
+              await supabase.from('foods').insert([remote]);
+            } catch {}
+          }
+        }
+      }
+
+      // 4. Si se encontró el producto -> Guardarlo de inmediato en "Mis Alimentos"
+      if (foundFood) {
+        const customScannedFood = {
+          ...foundFood,
+          id: foundFood.id || `custom_scan_${Date.now()}`,
+          barcode: code,
+          brand: foundFood.brand || 'Escaneado',
+          is_custom: true // ✅ Se marca como alimento propio
+        };
+
+        // Persistir en "Mis Alimentos" (userCustomFoods)
+        const updatedLocal = [customScannedFood, ...localCustom.filter(f => f.barcode !== code && f.id !== customScannedFood.id)];
+        localStorage.setItem('userCustomFoods', JSON.stringify(updatedLocal));
+
+        // Actualizar el estado en pantalla
+        setFoods(prev => {
+          const filtered = prev.filter(f => f.barcode !== code && f.id !== customScannedFood.id);
+          return [customScannedFood, ...filtered];
+        });
+
+        // Cambiar a la pestaña "Mis Alimentos" y abrir modal de gramajes
+        setSourceTab('custom');
+        handleSelectFood(customScannedFood);
         setLoading(false);
         return;
       }
@@ -238,7 +280,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     }
   };
 
-  // Guardar Alimento Creado por el Usuario
+  // Guardar Alimento Creado Manualmente
   const handleSaveCustomFood = async () => {
     if (!customName.trim() || !customCal) return;
     triggerHaptic(30);
@@ -257,7 +299,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
       is_custom: true
     };
 
-    // Guardar en localStorage para garantizar persistencia en "Mis Alimentos"
     const localCustom = JSON.parse(localStorage.getItem('userCustomFoods') || '[]');
     const updatedLocal = editingFood?.id
       ? localCustom.map(f => f.id === editingFood.id ? foodData : f)
@@ -289,7 +330,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     setCustomBarcode('');
     setEditingFood(null);
     setShowCustomForm(false);
-    setSourceTab('custom'); // Llevarlo directamente a Mis Alimentos
+    setSourceTab('custom');
   };
 
   const handleApplyFullPlan = (planItems) => {
@@ -302,19 +343,15 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     onAddToDay(food, grams);
   };
 
-  // Separación estricta y correcta
   const filteredFoods = useMemo(() => {
     return foods.filter(f => {
       const custom = isCustomFood(f);
       
-      // Si estamos en "Mis Alimentos", SOLO mostrar creados por el usuario
       if (sourceTab === 'custom' && !custom) return false;
-      // Si estamos en "Base de Datos", SOLO mostrar alimentos oficiales
       if (sourceTab === 'global' && custom) return false;
 
-      // Filtros de macronutrientes
-      if (activeFilter === 'high_pro') return (f.pro || 0) >= 15;
-      if (activeFilter === 'low_carb') return (f.carb || 0) <= 5;
+      if (activeFilter === 'high_pro') return (Number(f.pro) || 0) >= 15;
+      if (activeFilter === 'low_carb') return (Number(f.carb) || 0) <= 5;
       return true;
     });
   }, [foods, sourceTab, activeFilter]);
@@ -344,7 +381,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Botón Ideas de Menú */}
           <button
             onClick={() => {
               triggerHaptic(20);
@@ -356,7 +392,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
             <Lightbulb size={14} /> Ideas
           </button>
 
-          {/* Botón Crear Alimento */}
           <button
             onClick={() => {
               triggerHaptic(20);
@@ -377,7 +412,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
             <Plus size={18} strokeWidth={2.5} />
           </button>
           
-          {/* Escanear Código */}
           <button
             onClick={() => {
               triggerHaptic(25);
@@ -391,7 +425,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         </div>
       </div>
 
-      {/* Selector de División: Base de Datos Global vs Mis Alimentos Creados */}
+      {/* Selector de División */}
       <div className="px-5 mb-3 shrink-0">
         <div className="flex bg-white/[0.04] p-1 rounded-2xl border border-white/[0.06]">
           <button
@@ -432,7 +466,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={sourceTab === 'global' ? "Buscar en base de datos global..." : "Buscar en mis alimentos creados..."}
+            placeholder={sourceTab === 'global' ? "Buscar en base de datos global..." : "Buscar en mis alimentos guardados..."}
             className="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl pl-10 pr-4 py-3 text-xs text-white placeholder-zinc-500 focus:border-[#D4FF00]/50 outline-none transition-colors"
           />
           {search && (
@@ -483,11 +517,11 @@ export default function FoodCatalog({ onAddToDay, goals }) {
             <div>
               <p className="text-xs font-bold text-zinc-300">
                 {sourceTab === 'custom' 
-                  ? 'Aún no has creado alimentos personalizados' 
+                  ? 'Aún no has creado ni escaneado alimentos' 
                   : 'No se encontraron alimentos en la base de datos'}
               </p>
               <p className="text-[11px] text-zinc-500 font-mono mt-1">
-                {sourceTab === 'custom' ? 'Toca el botón abajo para guardar tu primer platillo' : 'Intenta con otro término de búsqueda'}
+                {sourceTab === 'custom' ? 'Escanea un código de barras o crea tu primer platillo' : 'Intenta con otro término de búsqueda'}
               </p>
             </div>
             
@@ -513,7 +547,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                 <p className="text-white font-bold text-xs truncate group-hover:text-[#D4FF00] transition-colors">{food.name}</p>
                 {isCustomFood(food) && (
                   <span className="text-[8px] font-mono font-black bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30 px-1.5 py-0.5 rounded-md shrink-0">
-                    CREADO
+                    GUARDADO
                   </span>
                 )}
               </div>
@@ -546,10 +580,10 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                     setEditingFood(food);
                     setCustomName(food.name);
                     setCustomBrand(food.brand || 'Casero');
-                    setCustomCal(food.cal.toString());
-                    setCustomPro(food.pro.toString());
-                    setCustomCarb(food.carb.toString());
-                    setCustomFat(food.fat.toString());
+                    setCustomCal((food.cal || 0).toString());
+                    setCustomPro((food.pro || 0).toString());
+                    setCustomCarb((food.carb || 0).toString());
+                    setCustomFat((food.fat || 0).toString());
                     setCustomBarcode(food.barcode || '');
                     setShowCustomForm(true);
                   }}
@@ -564,10 +598,10 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         ))}
       </div>
 
-      {/* MODAL: CONFIGURAR Y AÑADIR PORCIÓN */}
+      {/* Modal: Configurar Gramajes */}
       {selectedFood && ReactDOM.createPortal(
         <div 
-          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-end justify-center animate-fade-in"
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-end justify-center animate-fade-in select-none"
           onClick={() => setSelectedFood(null)}
         >
           <div 
@@ -590,7 +624,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               </button>
             </div>
 
-            {/* Selector de Momento de Comida */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block">
                 Asignar a:
@@ -616,7 +649,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               </div>
             </div>
 
-            {/* Selector y Stepper de Gramaje Ergonómico */}
             <div className="bg-white/[0.03] border border-white/[0.06] p-4 rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-zinc-300">Cantidad:</span>
@@ -638,7 +670,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                     type="number"
                     inputMode="numeric"
                     value={selectedGrams}
-                    onChange={(e) => setSelectedGrams(Math.max(1, parseInt(e.target.value) || 0))}
+                    onChange={(e) => setSelectedGrams(Math.max(1, parseInt(e.target.value, 10) || 0))}
                     className="w-20 bg-black border border-white/[0.15] rounded-xl text-center text-sm font-bold text-[#D4FF00] py-1.5 outline-none focus:border-[#D4FF00] font-mono"
                   />
 
@@ -657,7 +689,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                 </div>
               </div>
 
-              {/* Accesos Rápidos de Gramaje */}
               <div className="flex gap-1.5">
                 {[50, 100, 150, 200, 250].map(g => (
                   <button
@@ -679,7 +710,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               </div>
             </div>
 
-            {/* Resumen Nutricional Calculado */}
             <div className="grid grid-cols-4 gap-2 text-center text-[10px] bg-white/[0.02] border border-white/[0.04] p-3 rounded-2xl font-mono">
               <div>
                 <span className="text-zinc-500 block">Kcal</span>
@@ -699,7 +729,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               </div>
             </div>
 
-            {/* Botón de Confirmación */}
             <button
               onClick={handleConfirmAdd}
               className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-[0_0_25px_rgba(212,255,0,0.4)] font-mono"
@@ -712,9 +741,9 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         document.body
       )}
 
-      {/* DIÁLOGO DARK GLASS SI EL CÓDIGO ESCANEADO NO EXISTE */}
+      {/* Diálogo si el código de barras no existe */}
       {notFoundBarcode && (
-        <div className="fixed inset-0 z-[140] bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in">
+        <div className="fixed inset-0 z-[140] bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in select-none">
           <div className="luxury-card p-6 max-w-sm w-full space-y-4 animate-scale-in">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-[#D4FF00]/10 text-[#D4FF00]">
@@ -730,7 +759,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               Este código de barras no está en la base de datos. ¿Deseas registrarlo en "Mis Alimentos" ahora?
             </p>
 
-            <div className="flex gap-2.5 pt-1">
+            <div className="flex gap-2.5 pt-1 font-mono">
               <button
                 onClick={() => setNotFoundBarcode(null)}
                 className="flex-1 py-3 bg-white/[0.04] border border-white/[0.08] text-white text-xs font-bold rounded-xl active:scale-95"
@@ -743,7 +772,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                   setNotFoundBarcode(null);
                   setShowCustomForm(true);
                 }}
-                className="flex-1 py-3 bg-[#D4FF00] text-[#09090B] text-xs font-black uppercase tracking-wider rounded-xl active:scale-95 shadow-md font-mono"
+                className="flex-1 py-3 bg-[#D4FF00] text-[#09090B] text-xs font-black uppercase tracking-wider rounded-xl active:scale-95 shadow-md"
               >
                 Registrar
               </button>
@@ -762,9 +791,9 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         />
       )}
 
-      {/* Modal: Crear / Editar Alimento Personalizado */}
+      {/* Modal: Crear / Editar Alimento */}
       {showCustomForm && (
-        <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[130] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
           <div className="w-full max-w-sm bg-[#0A0A0C] border border-white/[0.08] rounded-3xl p-5 space-y-4 shadow-2xl animate-scale-in">
             <div className="flex justify-between items-center">
               <h3 className="text-white font-bold text-sm font-sans">
@@ -773,6 +802,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               <button
                 onClick={() => setShowCustomForm(false)}
                 className="p-1 text-zinc-500 hover:text-white"
+                aria-label="Cerrar"
               >
                 <X size={18} />
               </button>
@@ -784,14 +814,14 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder="Nombre del platillo o receta *"
-                className="w-full bg-black/60 border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:border-[#D4FF00] outline-none"
+                className="w-full bg-black/60 border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:border-[#D4FF00] outline-none font-sans"
               />
               <input
                 type="text"
                 value={customBrand}
                 onChange={(e) => setCustomBrand(e.target.value)}
                 placeholder="Marca o referencia (ej. Casero, Mamá)"
-                className="w-full bg-black/60 border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:border-[#D4FF00] outline-none"
+                className="w-full bg-black/60 border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:border-[#D4FF00] outline-none font-sans"
               />
 
               <div className="grid grid-cols-3 gap-2">
