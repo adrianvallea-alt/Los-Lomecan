@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// src/components/GymTracker.jsx
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, Plus, Edit3, Trash2, Globe, Sparkles } from 'lucide-react';
 import {
   updatePersonalRecords, getDayRecords, limitHistory,
@@ -47,6 +48,11 @@ export default function GymTracker({
   const [showImportModal, setShowImportModal] = useState(false);
   const [globalRoutinesVersion, setGlobalRoutinesVersion] = useState(0);
 
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const showImportModalRef = useRef(showImportModal);
+  showImportModalRef.current = showImportModal;
+
   const showToast = useCallback((msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
@@ -58,40 +64,48 @@ export default function GymTracker({
   }, [view]);
 
   // =========================================================================
-  // CONTROLADOR DEL BOTÓN FÍSICO ATRÁS DENTRO DEL MÓDULO DE GIMNASIO
+  // GESTIÓN JERÁRQUICA DEL BOTÓN ATRÁS EN GIMNASIO
   // =========================================================================
   useEffect(() => {
     const handleBackEvent = (e) => {
-      // 1. Si está abierto el modal de importar, cerrarlo
-      if (showImportModal) {
+      // 1. Si el modal de importar está abierto, cerrarlo y detener el retroceso
+      if (showImportModalRef.current) {
         e.preventDefault();
         setShowImportModal(false);
         return;
       }
 
-      // 2. Si estamos en sub-vistas, regresar ordenadamente
-      if (view === 'create') {
+      const currentV = viewRef.current;
+
+      // 2. Si estamos en el editor de rutinas, regresar al listado
+      if (currentV === 'create') {
         e.preventDefault();
         setEditingRoutine(null);
-        navigate('library');
+        setView('library');
         return;
       }
-      if (view === 'daySelector' || view === 'history' || view === 'library' || view === 'exerciseLibrary' || view === 'finished') {
+
+      // 3. Si estamos en pantallas secundarias, regresar a la pantalla 'home' de rutinas
+      if (currentV === 'daySelector' || currentV === 'history' || currentV === 'library' || currentV === 'exerciseLibrary' || currentV === 'finished') {
         e.preventDefault();
-        navigate('home');
+        setView('home');
         return;
       }
-      if (view === 'libraryAuth') {
+
+      if (currentV === 'libraryAuth') {
         e.preventDefault();
-        navigate(previousView || 'home');
+        setView('home');
         return;
       }
-      // Nota: Si view === 'tracker', TrackerView intercepta su propio evento para abrir diálogo de confirmación
+
+      // 4. Si estamos en 'home' (pantalla principal de rutinas):
+      // NO llamamos a e.preventDefault(). Dejamos que App.jsx capture el evento
+      // y regrese fluidamente a la pestaña "Hoy" (Dashboard).
     };
 
     window.addEventListener('lomecan-hardware-back', handleBackEvent);
     return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
-  }, [showImportModal, view, navigate, previousView]);
+  }, []);
 
   const currentRoutine = useMemo(() => routines.find(r => r.is_active === true), [routines]);
   const isAdmin = activeProfile?.id === 'adrian';

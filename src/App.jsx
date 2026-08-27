@@ -10,7 +10,7 @@ import EvolutionView from './components/EvolutionView';
 import ProfileManager from './components/ProfileManager';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
-import { Users, Lock, Radio, LogOut } from 'lucide-react';
+import { Users, Lock, Radio, LogOut, AlertCircle } from 'lucide-react';
 import {
   fetchProfiles,
   fetchUserRoutines,
@@ -54,6 +54,23 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [exitToast, setExitToast] = useState(false);
 
+  // Referencias para que el listener del botón atrás nunca se desconecte ni tenga datos viejos
+  const stateRef = useRef({
+    currentTab: 'hoy',
+    showOnboarding: false,
+    showProfileManager: false,
+    openLibrary: false,
+    activeProfile: null,
+  });
+
+  stateRef.current = {
+    currentTab,
+    showOnboarding,
+    showProfileManager,
+    openLibrary,
+    activeProfile,
+  };
+
   const lastBackPressRef = useRef(0);
   const exitToastTimerRef = useRef(null);
 
@@ -62,94 +79,96 @@ export default function App() {
   const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
   // =========================================================================
-  // GESTOR CENTRALIZADO DEL BOTÓN ATRÁS (JERARQUÍA Y DOBLE PULSACIÓN)
+  // GESTOR PRINCIPAL DEL BOTÓN ATRÁS (UNIFICADO Y PERSISTENTE)
   // =========================================================================
-  const handleHardwareBack = useCallback(() => {
-    // 1. Preguntar a componentes hijos activos si tienen modales abiertos
+  const executeBackAction = useCallback(() => {
+    const currentState = stateRef.current;
+
+    // 1. Emitir evento a componentes hijos (Modales de Gym, Catálogo, etc.)
     const customBackEvent = new CustomEvent('lomecan-hardware-back', { cancelable: true });
     window.dispatchEvent(customBackEvent);
 
-    // Si algún componente hijo manejó el evento (cerró su modal), no hacemos nada más
+    // Si algún componente hijo cerró su modal o vista interna, nos detenemos aquí
     if (customBackEvent.defaultPrevented) {
       return;
     }
 
-    // 2. Modales de nivel superior en App.jsx
-    if (showOnboarding) {
+    // 2. Modales de nivel superior de App.jsx
+    if (currentState.showOnboarding) {
       setShowOnboarding(false);
       return;
     }
-    if (showProfileManager) {
+    if (currentState.showProfileManager) {
       setShowProfileManager(false);
       return;
     }
-    if (openLibrary) {
+    if (currentState.openLibrary) {
       setOpenLibrary(false);
       return;
     }
 
-    // 3. Si estamos en otra pestaña (Alimentos, Gimnasio, Evolución), regresar a "Hoy"
-    if (currentTab !== 'hoy') {
+    // 3. Si no estamos en la pestaña principal "Hoy" (Dashboard), regresar a "Hoy"
+    if (currentState.currentTab !== 'hoy') {
       setCurrentTab('hoy');
       return;
     }
 
-    // 4. Estamos en la pantalla principal (Dashboard "Hoy" o Selector de Perfil):
-    // Control de doble pulsación para salir de la app
+    // 4. Estamos en el Dashboard principal: Doble pulsación para salir
     const now = Date.now();
     if (now - lastBackPressRef.current < 2000) {
-      // Segunda pulsación en menos de 2 segundos -> Salir
+      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
+      setExitToast(false);
       try {
         CapApp.exitApp();
-      } catch (e) {
-        // En navegador web
-      }
+      } catch (e) {}
     } else {
-      // Primera pulsación -> Mostrar toast informativo
       lastBackPressRef.current = now;
       setExitToast(true);
+
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate(30); } catch {}
+      }
+
       if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
       exitToastTimerRef.current = setTimeout(() => {
         setExitToast(false);
       }, 2000);
-
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        try { navigator.vibrate(25); } catch {}
-      }
     }
-  }, [showOnboarding, showProfileManager, openLibrary, currentTab]);
+  }, []);
 
+  // Registrar el listener una sola vez al montar (sin dependencias cambiantes)
   useEffect(() => {
-    let backListener;
-    const registerCapacitorBack = async () => {
+    let capListener;
+
+    const setupListeners = async () => {
       try {
-        backListener = await CapApp.addListener('backButton', () => {
-          handleHardwareBack();
+        capListener = await CapApp.addListener('backButton', () => {
+          executeBackAction();
         });
-      } catch (err) {}
+      } catch (e) {}
     };
 
-    registerCapacitorBack();
+    setupListeners();
 
-    // Soporte para PWA y Navegadores (gesto de retroceso de pantalla)
-    const pushDummyHistory = () => {
-      window.history.pushState({ lomecanNav: true }, '');
+    // Soporte PWA / Gestos en navegador
+    const pushHistoryTrap = () => {
+      window.history.pushState({ lomecanTrap: Date.now() }, '');
     };
-    pushDummyHistory();
+    pushHistoryTrap();
 
     const handlePopState = () => {
-      pushDummyHistory();
-      handleHardwareBack();
+      pushHistoryTrap();
+      executeBackAction();
     };
 
     window.addEventListener('popstate', handlePopState);
 
     return () => {
-      if (backListener) backListener.remove();
+      if (capListener) capListener.remove();
       window.removeEventListener('popstate', handlePopState);
       if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
     };
-  }, [handleHardwareBack]);
+  }, [executeBackAction]);
 
   // Cargar perfiles
   useEffect(() => {
@@ -565,11 +584,11 @@ export default function App() {
 
         <InstallPrompt />
 
-        {/* Notificación flotante de salida */}
+        {/* AVISO FLOTANTE DE SALIDA: DOBLE PULSACIÓN */}
         {exitToast && (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] bg-[#0C0C12]/95 border border-[#D4FF00]/50 text-white text-xs font-mono font-bold px-5 py-2.5 rounded-full shadow-[0_0_30px_rgba(212,255,0,0.3)] backdrop-blur-xl animate-fade-in flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse" />
-            Pulsa de nuevo para salir de la app
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999] bg-[#0A0A0F]/95 border border-[#D4FF00] text-white text-xs font-mono font-black px-5 py-3 rounded-full shadow-[0_0_35px_rgba(212,255,0,0.4)] backdrop-blur-2xl animate-fade-in flex items-center gap-2.5 whitespace-nowrap">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D4FF00] animate-ping" />
+            <span>Presiona de nuevo para salir de Lomecan</span>
           </div>
         )}
       </div>

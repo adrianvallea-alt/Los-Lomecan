@@ -1,3 +1,4 @@
+// src/components/gym/TrackerView.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { 
@@ -138,30 +139,48 @@ export default function TrackerView({
   const exerciseRefs = useRef({});
   const DRAFT_KEY = `draft_${activeRoutine.id}_${activeDayIndex}`;
 
+  const stateRef = useRef({
+    newPrCelebration,
+    detailExercise,
+    plateCalcTarget,
+    warmupTarget,
+    showExitConfirm
+  });
+
+  stateRef.current = {
+    newPrCelebration,
+    detailExercise,
+    plateCalcTarget,
+    warmupTarget,
+    showExitConfirm
+  };
+
   // =========================================================================
   // CONTROLADOR DEL BOTÓN ATRÁS EN TRACKER VIEW
   // =========================================================================
   useEffect(() => {
     const handleBackEvent = (e) => {
       e.preventDefault();
+      const current = stateRef.current;
+
       // 1. Cerrar modales internos si están abiertos
-      if (newPrCelebration) {
+      if (current.newPrCelebration) {
         setNewPrCelebration(null);
         return;
       }
-      if (detailExercise) {
+      if (current.detailExercise) {
         setDetailExercise(null);
         return;
       }
-      if (plateCalcTarget) {
+      if (current.plateCalcTarget) {
         setPlateCalcTarget(null);
         return;
       }
-      if (warmupTarget) {
+      if (current.warmupTarget) {
         setWarmupTarget(null);
         return;
       }
-      if (showExitConfirm) {
+      if (current.showExitConfirm) {
         setShowExitConfirm(false);
         return;
       }
@@ -172,7 +191,7 @@ export default function TrackerView({
 
     window.addEventListener('lomecan-hardware-back', handleBackEvent);
     return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
-  }, [newPrCelebration, detailExercise, plateCalcTarget, warmupTarget, showExitConfirm]);
+  }, []);
 
   // Mantener pantalla encendida
   useEffect(() => {
