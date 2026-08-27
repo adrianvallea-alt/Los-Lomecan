@@ -27,6 +27,8 @@ import useReminders from './hooks/useReminders';
 import useOfflineQueue from './hooks/useOfflineQueue';
 import useWeightLogs from './hooks/useWeightLogs';
 
+const APP_VERSION = 'v1.2';
+
 const DEFAULT_PROFILES = [
   { id: 'adrian', name: 'Adrián', role: 'Coach', color: 'lime', goals: { cal: 2800, pro: 180, carb: 300, fat: 75 }, pin: null, avatar: null },
   { id: 'esposa', name: 'Esposa', role: 'Fitness Partner', color: 'lavender', goals: { cal: 2000, pro: 120, carb: 200, fat: 55 }, pin: null, avatar: null },
@@ -60,7 +62,6 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
 
-  // Referencias de estado en tiempo real
   const stateRef = useRef({
     showIntro: false,
     currentTab: 'hoy',
@@ -88,11 +89,10 @@ export default function App() {
   const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
   // =========================================================================
-  // GESTOR DEL BOTÓN ATRÁS CON FILTRO ANTI-REBOTE (ANTI-DUPLICADOS)
+  // GESTOR CENTRALIZADO DEL BOTÓN ATRÁS (CON FILTRO ANTI-REBOTE 350MS)
   // =========================================================================
   const executeBackAction = useCallback(() => {
     const now = Date.now();
-    // Bloquear rebote si se ejecuta dos veces en menos de 350ms
     if (now - lastBackExecutionRef.current < 350) {
       return;
     }
@@ -100,20 +100,20 @@ export default function App() {
 
     const currentState = stateRef.current;
 
-    // 0. Si el modal de confirmación de salida está abierto, cerrarlo
+    // 1. Si el modal de salida está abierto, cerrarlo
     if (currentState.showExitModal) {
       setShowExitModal(false);
       return;
     }
 
-    // 1. Si está la pantalla de inicio, saltarla
+    // 2. Si está la pantalla de inicio, saltarla
     if (currentState.showIntro) {
       sessionStorage.setItem('lomecan_intro_shown', 'true');
       setShowIntro(false);
       return;
     }
 
-    // 2. Emitir evento a componentes hijos (Modales de Gym, Catálogo, etc.)
+    // 3. Emitir evento a componentes hijos (TrackerView, GymTracker, Modales)
     const customBackEvent = new CustomEvent('lomecan-hardware-back', { cancelable: true });
     window.dispatchEvent(customBackEvent);
 
@@ -121,7 +121,7 @@ export default function App() {
       return;
     }
 
-    // 3. Modales de nivel superior de App.jsx
+    // 4. Modales de nivel superior de App.jsx
     if (currentState.showOnboarding) {
       setShowOnboarding(false);
       return;
@@ -135,13 +135,13 @@ export default function App() {
       return;
     }
 
-    // 4. Si estamos en otra pestaña (Gimnasio, Alimentos o Evolución), REGRESAR A "HOY" (Dashboard)
+    // 5. Si estamos en Gimnasio, Alimentos o Evolución: REGRESAR A "HOY" (Dashboard)
     if (currentState.currentTab !== 'hoy') {
       setCurrentTab('hoy');
       return;
     }
 
-    // 5. Si ya estamos en el Dashboard principal: Mostrar diálogo de confirmación de salida
+    // 6. Si ya estamos en el Dashboard principal: Mostrar diálogo de confirmación
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try { navigator.vibrate(30); } catch {}
     }
@@ -151,7 +151,6 @@ export default function App() {
   useEffect(() => {
     let capListener;
 
-    // Si es aplicación nativa en Android (Capacitor)
     if (Capacitor.isNativePlatform()) {
       const setupNativeBack = async () => {
         try {
@@ -162,7 +161,6 @@ export default function App() {
       };
       setupNativeBack();
     } else {
-      // Si es PWA en navegador móvil
       const pushHistoryTrap = () => {
         window.history.pushState({ lomecanTrap: Date.now() }, '');
       };
@@ -503,7 +501,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Header Superior */}
+        {/* Header Superior con Versión Visible */}
         <header 
           className="px-5 pb-2.5 flex justify-between items-center z-20 bg-[#050507]/80 backdrop-blur-2xl border-b border-white/[0.05] shrink-0"
           style={{ paddingTop: queue.length > 0 ? '0.75rem' : 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
@@ -522,6 +520,9 @@ export default function App() {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-white text-xs font-extrabold tracking-tight">{activeProfile?.name || 'Atleta'}</span>
+                <span className="text-[8px] font-mono font-black bg-[#D4FF00]/15 text-[#D4FF00] border border-[#D4FF00]/30 px-1 rounded">
+                  {APP_VERSION}
+                </span>
               </div>
               <span className="text-[9px] font-mono font-bold tracking-[0.2em] text-[#D4FF00]/80 uppercase block">
                 {activeProfile?.role || 'ATLETA PRO'}
@@ -607,7 +608,7 @@ export default function App() {
 
         <InstallPrompt />
 
-        {/* DIÁLOGO / MODAL DE CONFIRMACIÓN DE SALIDA (IMPOSIBLE DE CERRAR ACCIDENTALMENTE) */}
+        {/* MODAL DE CONFIRMACIÓN DE SALIDA VISIBLE Y ELEGANTE */}
         {showExitModal && (
           <div className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in select-none">
             <div className="luxury-card p-6 max-w-xs w-full space-y-4 text-center border-white/[0.1] shadow-2xl animate-scale-in">
