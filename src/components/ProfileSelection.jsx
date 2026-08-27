@@ -1,5 +1,4 @@
-// src/components/ProfileSelection.jsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Plus, Edit3, Lock, Crown, Sparkles } from 'lucide-react';
 import PinModal from './PinModal';
 import EditProfileModal from './EditProfileModal';
@@ -17,6 +16,30 @@ export default function ProfileSelection({ profiles = [], onSelectProfile, onAdd
   const [showPinModal, setShowPinModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
+
+  // =========================================================================
+  // CONTROLADOR DEL BOTÓN FÍSICO ATRÁS EN SELECCIÓN DE PERFIL
+  // =========================================================================
+  useEffect(() => {
+    const handleBackEvent = (e) => {
+      if (showPinModal) {
+        e.preventDefault();
+        setShowPinModal(false);
+        setSelectedProfile(null);
+        setPinAction(null);
+        return;
+      }
+      if (showEditModal) {
+        e.preventDefault();
+        setShowEditModal(false);
+        setEditingProfile(null);
+        return;
+      }
+    };
+
+    window.addEventListener('lomecan-hardware-back', handleBackEvent);
+    return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
+  }, [showPinModal, showEditModal]);
 
   const handleProfileClick = useCallback((profile) => {
     triggerHaptic(20);

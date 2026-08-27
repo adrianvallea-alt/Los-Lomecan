@@ -1,5 +1,5 @@
 // src/components/FoodCatalog.jsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { 
   Search, Plus, X, Sparkles, Barcode, Scale, Edit3, Check, Lightbulb,
@@ -65,6 +65,8 @@ export default function FoodCatalog({ onAddToDay, goals }) {
   const [customFat, setCustomFat] = useState('');
   const [customBarcode, setCustomBarcode] = useState('');
 
+  const isInitialMount = useRef(true);
+
   // Cargar catálogo y alimentos locales
   const loadAllFoods = useCallback(async () => {
     setLoading(true);
@@ -102,12 +104,18 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     }
   }, []);
 
+  // Carga inicial controlada (solo 1 vez al montar)
   useEffect(() => {
     loadAllFoods();
   }, [loadAllFoods]);
 
-  // Búsqueda en tiempo real
+  // Búsqueda en tiempo real optimizada (sin disparar reload en blanco)
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
     if (!search.trim()) {
       loadAllFoods();
       return;
@@ -191,13 +199,11 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     setSelectedGrams(100);
   };
 
-  // ✅ ESCÁNER: Guarda automáticamente el producto escaneado en "Mis Alimentos"
   const handleBarcode = async (code) => {
     setShowScanner(false);
     setLoading(true);
 
     try {
-      // 1. Revisar si ya está guardado en "Mis Alimentos" localmente
       const localCustom = JSON.parse(localStorage.getItem('userCustomFoods') || '[]');
       const existingLocal = localCustom.find(f => f.barcode === code);
       if (existingLocal) {
@@ -209,7 +215,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
       let foundFood = null;
 
-      // 2. Revisar base de datos Supabase
       if (navigator.onLine) {
         const { data: cached } = await supabase
           .from('foods')
@@ -220,7 +225,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         if (cached) foundFood = cached;
       }
 
-      // 3. Si no está en Supabase, consultar OpenFoodFacts
       if (!foundFood) {
         const remote = await getFoodByBarcode(code);
         if (remote) {
@@ -233,27 +237,23 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         }
       }
 
-      // 4. Si se encontró el producto -> Guardarlo de inmediato en "Mis Alimentos"
       if (foundFood) {
         const customScannedFood = {
           ...foundFood,
           id: foundFood.id || `custom_scan_${Date.now()}`,
           barcode: code,
           brand: foundFood.brand || 'Escaneado',
-          is_custom: true // ✅ Se marca como alimento propio
+          is_custom: true
         };
 
-        // Persistir en "Mis Alimentos" (userCustomFoods)
         const updatedLocal = [customScannedFood, ...localCustom.filter(f => f.barcode !== code && f.id !== customScannedFood.id)];
         localStorage.setItem('userCustomFoods', JSON.stringify(updatedLocal));
 
-        // Actualizar el estado en pantalla
         setFoods(prev => {
           const filtered = prev.filter(f => f.barcode !== code && f.id !== customScannedFood.id);
           return [customScannedFood, ...filtered];
         });
 
-        // Cambiar a la pestaña "Mis Alimentos" y abrir modal de gramajes
         setSourceTab('custom');
         handleSelectFood(customScannedFood);
         setLoading(false);
@@ -280,7 +280,6 @@ export default function FoodCatalog({ onAddToDay, goals }) {
     }
   };
 
-  // Guardar Alimento Creado Manualmente
   const handleSaveCustomFood = async () => {
     if (!customName.trim() || !customCal) return;
     triggerHaptic(30);
@@ -373,7 +372,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 relative bg-[#09090B] overflow-hidden select-none">
       
-      {/* Header Superior */}
+      {/* Header Superior con Botones Sólidos y Sin Parpadeo */}
       <div className="px-5 pt-3 pb-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-[#D4FF00]" />
@@ -381,18 +380,23 @@ export default function FoodCatalog({ onAddToDay, goals }) {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* Botón 1: Ideas */}
           <button
+            type="button"
             onClick={() => {
               triggerHaptic(20);
               setShowMealPlanner(true);
             }}
-            className="px-3 py-2 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] text-xs font-mono font-bold flex items-center gap-1.5 active:scale-95 transition-all shadow-[0_0_12px_rgba(212,255,0,0.15)]"
+            className="px-3 py-2 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] text-xs font-mono font-bold flex items-center gap-1.5 active:scale-95 transition-colors"
             title="Ver sugerencias de comidas balanceadas"
           >
-            <Lightbulb size={14} /> Ideas
+            <Lightbulb size={14} />
+            <span>Ideas</span>
           </button>
 
+          {/* Botón 2: + */}
           <button
+            type="button"
             onClick={() => {
               triggerHaptic(20);
               setEditingFood(null);
@@ -405,20 +409,23 @@ export default function FoodCatalog({ onAddToDay, goals }) {
               setCustomBarcode('');
               setShowCustomForm(true);
             }}
-            className="p-2.5 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] active:scale-95 transition-all shadow-[0_0_15px_rgba(212,255,0,0.15)]"
+            className="p-2.5 rounded-full bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] active:scale-95 transition-colors"
             aria-label="Crear alimento nuevo"
             title="Crear Alimento Casero"
           >
             <Plus size={18} strokeWidth={2.5} />
           </button>
           
+          {/* Botón 3: Escáner de Barras */}
           <button
+            type="button"
             onClick={() => {
               triggerHaptic(25);
               setShowScanner(true);
             }}
-            className="p-2.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white active:scale-95 transition-all"
+            className="p-2.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-zinc-400 hover:text-white hover:border-white/20 active:scale-95 transition-colors"
             aria-label="Escanear código de barras"
+            title="Escanear código de barras"
           >
             <Barcode size={18} />
           </button>
@@ -429,6 +436,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
       <div className="px-5 mb-3 shrink-0">
         <div className="flex bg-white/[0.04] p-1 rounded-2xl border border-white/[0.06]">
           <button
+            type="button"
             onClick={() => {
               triggerHaptic(15);
               setSourceTab('global');
@@ -443,6 +451,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
           </button>
 
           <button
+            type="button"
             onClick={() => {
               triggerHaptic(15);
               setSourceTab('custom');
@@ -471,6 +480,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
           />
           {search && (
             <button
+              type="button"
               onClick={() => setSearch('')}
               className="absolute right-3.5 top-3.5 text-zinc-500 hover:text-white"
             >
@@ -486,6 +496,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
           {FILTER_TAGS.map(tag => (
             <button
               key={tag.id}
+              type="button"
               onClick={() => {
                 triggerHaptic(15);
                 setActiveFilter(tag.id);
@@ -527,6 +538,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
             
             {sourceTab === 'custom' && (
               <button
+                type="button"
                 onClick={() => setShowCustomForm(true)}
                 className="px-5 py-3 volt-button rounded-xl text-xs font-black uppercase tracking-wider font-mono active:scale-95 shadow-lg"
               >
@@ -563,6 +575,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
             <div className="flex items-center gap-1.5 shrink-0">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleSelectFood(food);
@@ -575,6 +588,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
               {isCustomFood(food) && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingFood(food);
@@ -587,7 +601,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                     setCustomBarcode(food.barcode || '');
                     setShowCustomForm(true);
                   }}
-                  className="p-2 rounded-xl bg-white/[0.03] text-zinc-400 hover:text-white active:scale-90"
+                  className="p-2 rounded-xl bg-white/[0.03] text-zinc-400 hover:text-white active:scale-90 transition-colors"
                   title="Editar alimento"
                 >
                   <Edit3 size={13} />
@@ -617,6 +631,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                 <p className="text-xs text-zinc-400 mt-0.5 font-mono">{selectedFood.brand || 'Alimento'} · Base 100g</p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedFood(null)}
                 className="p-2 rounded-full bg-white/[0.05] text-zinc-400 hover:text-white"
               >
@@ -730,6 +745,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
             </div>
 
             <button
+              type="button"
               onClick={handleConfirmAdd}
               className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 shadow-[0_0_25px_rgba(212,255,0,0.4)] font-mono"
             >
@@ -761,12 +777,14 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
             <div className="flex gap-2.5 pt-1 font-mono">
               <button
+                type="button"
                 onClick={() => setNotFoundBarcode(null)}
                 className="flex-1 py-3 bg-white/[0.04] border border-white/[0.08] text-white text-xs font-bold rounded-xl active:scale-95"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setCustomBarcode(notFoundBarcode);
                   setNotFoundBarcode(null);
@@ -800,6 +818,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
                 {editingFood ? 'Editar Mi Alimento' : 'Nuevo Alimento Casero (Base 100g)'}
               </h3>
               <button
+                type="button"
                 onClick={() => setShowCustomForm(false)}
                 className="p-1 text-zinc-500 hover:text-white"
                 aria-label="Cerrar"
@@ -878,6 +897,7 @@ export default function FoodCatalog({ onAddToDay, goals }) {
 
             <div className="flex gap-2 pt-2">
               <button
+                type="button"
                 onClick={handleSaveCustomFood}
                 disabled={!customName.trim() || !customCal}
                 className="flex-1 py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 disabled:opacity-40 font-mono"

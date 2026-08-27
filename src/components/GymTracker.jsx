@@ -1,6 +1,5 @@
-// src/components/GymTracker.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Plus, Edit3, Trash2 } from 'lucide-react';
+import { X, Plus, Edit3, Trash2, Globe, Sparkles } from 'lucide-react';
 import {
   updatePersonalRecords, getDayRecords, limitHistory,
   getProgressionSuggestion
@@ -58,6 +57,42 @@ export default function GymTracker({
     setView(nextView);
   }, [view]);
 
+  // =========================================================================
+  // CONTROLADOR DEL BOTÓN FÍSICO ATRÁS DENTRO DEL MÓDULO DE GIMNASIO
+  // =========================================================================
+  useEffect(() => {
+    const handleBackEvent = (e) => {
+      // 1. Si está abierto el modal de importar, cerrarlo
+      if (showImportModal) {
+        e.preventDefault();
+        setShowImportModal(false);
+        return;
+      }
+
+      // 2. Si estamos en sub-vistas, regresar ordenadamente
+      if (view === 'create') {
+        e.preventDefault();
+        setEditingRoutine(null);
+        navigate('library');
+        return;
+      }
+      if (view === 'daySelector' || view === 'history' || view === 'library' || view === 'exerciseLibrary' || view === 'finished') {
+        e.preventDefault();
+        navigate('home');
+        return;
+      }
+      if (view === 'libraryAuth') {
+        e.preventDefault();
+        navigate(previousView || 'home');
+        return;
+      }
+      // Nota: Si view === 'tracker', TrackerView intercepta su propio evento para abrir diálogo de confirmación
+    };
+
+    window.addEventListener('lomecan-hardware-back', handleBackEvent);
+    return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
+  }, [showImportModal, view, navigate, previousView]);
+
   const currentRoutine = useMemo(() => routines.find(r => r.is_active === true), [routines]);
   const isAdmin = activeProfile?.id === 'adrian';
 
@@ -110,7 +145,7 @@ export default function GymTracker({
       await importRoutineToProfile(activeProfile.id, globalRoutineId);
       const freshRoutines = await fetchUserRoutines(activeProfile.id);
       onUpdateRoutines(freshRoutines);
-      showToast('✅ Rutina importada correctamente');
+      showToast('✅ Rutina importada a tus rutinas');
       setShowImportModal(false);
     } catch (err) {
       console.error('Error importando rutina:', err);
@@ -119,15 +154,18 @@ export default function GymTracker({
   };
 
   const handleDeleteGlobalRoutine = async (routineId) => {
-    if (!isAdmin) return;
-    if (window.confirm('¿Eliminar esta rutina global? Las copias locales existentes se mantendrán.')) {
+    if (!isAdmin) {
+      showToast('⚠️ Solo el administrador puede borrar plantillas globales');
+      return;
+    }
+    if (window.confirm('¿Eliminar esta rutina del catálogo global del club?')) {
       try {
         await deleteUserRoutine(activeProfile.id, routineId, true);
         showToast('🗑️ Rutina global eliminada');
         setGlobalRoutinesVersion(prev => prev + 1);
       } catch {
         addToQueue('deleteRoutine', { id: routineId, isGlobal: true, profileId: activeProfile.id });
-        showToast('🗑️ Rutina eliminada (pendiente sinc)');
+        showToast('🗑️ Rutina eliminada (pendiente sincronización)');
       }
     }
   };
@@ -236,7 +274,7 @@ export default function GymTracker({
   };
 
   const handleDeleteRoutine = async (routineId) => {
-    if (window.confirm('¿Eliminar esta rutina de tu lista?')) {
+    if (window.confirm('¿Eliminar esta rutina de tu lista personal?')) {
       const updated = routines.filter(r => r.id !== routineId);
       onUpdateRoutines(updated);
       try { 
@@ -308,40 +346,62 @@ export default function GymTracker({
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-3 pb-20 no-scrollbar">
-              {routines.map(routine => (
-                <div key={routine.id} className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">{routine.name}</p>
-                    <p className="text-xs text-zinc-500">{routine.trainingDays?.length || 0} días</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {routine.id !== currentRoutine?.id ? (
-                      <button 
-                        onClick={() => handleSetActiveRoutine(routine)}
-                        className="px-3 py-1.5 bg-[#D4FF00] text-[#09090B] text-xs font-bold rounded-lg hover:bg-[#C4E600]"
-                      >
-                        Usar este mes
-                      </button>
-                    ) : (
-                      <span className="px-3 py-1.5 bg-white/[0.05] border border-white/[0.08] text-zinc-400 text-xs rounded-lg">
-                        En curso
-                      </span>
-                    )}
-                    <button onClick={() => handleEditRoutine(routine)} className="p-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white">
-                      <Edit3 size={14} />
-                    </button>
-                    <button onClick={() => handleDeleteRoutine(routine.id)} className="p-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-red-400">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+              {routines.length === 0 ? (
+                <div className="text-center py-10 text-zinc-500 text-xs font-mono">
+                  No tienes rutinas activas. Importa una del club o crea una nueva.
                 </div>
-              ))}
+              ) : (
+                routines.map(routine => (
+                  <div key={routine.id} className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-white font-medium text-sm">{routine.name}</p>
+                      <p className="text-xs text-zinc-500">{routine.trainingDays?.length || 0} días configurados</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {routine.id !== currentRoutine?.id ? (
+                        <button 
+                          onClick={() => handleSetActiveRoutine(routine)}
+                          className="px-3 py-1.5 bg-[#D4FF00] text-[#09090B] text-xs font-black rounded-lg hover:bg-[#C4E600] active:scale-95 transition-all font-mono"
+                        >
+                          Usar este mes
+                        </button>
+                      ) : (
+                        <span className="px-3 py-1.5 bg-[#D4FF00]/10 border border-[#D4FF00]/30 text-[#D4FF00] text-xs font-mono font-bold rounded-lg">
+                          En curso
+                        </span>
+                      )}
+                      <button 
+                        onClick={() => handleEditRoutine(routine)} 
+                        className="p-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white active:scale-90"
+                        title="Editar / Crear nueva versión"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteRoutine(routine.id)} 
+                        className="p-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-red-400 active:scale-90"
+                        title="Eliminar de mi lista"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+
               <div className="flex flex-col gap-3 pt-4">
-                 <button onClick={() => setShowImportModal(true)} className="w-full py-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-sm text-zinc-300 hover:text-white hover:border-white/[0.12] transition-colors font-bold">
-                   Importar rutina global
+                 <button 
+                   onClick={() => setShowImportModal(true)} 
+                   className="w-full py-4 bg-[#D4FF00]/10 border border-[#D4FF00]/30 rounded-2xl text-xs font-mono font-black uppercase tracking-wider text-[#D4FF00] hover:bg-[#D4FF00] hover:text-[#09090B] transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(212,255,0,0.15)] active:scale-95"
+                 >
+                   <Globe size={15} /> Importar rutina global del club
                  </button>
-                 <button onClick={() => { setEditingRoutine(null); navigate('create'); }} className="w-full py-4 border border-dashed border-white/[0.08] rounded-2xl text-sm text-zinc-400 hover:border-[#D4FF00]/30 hover:text-[#D4FF00] flex items-center justify-center gap-2 font-medium">
-                   <Plus size={16} /> Nueva rutina
+
+                 <button 
+                   onClick={() => { setEditingRoutine(null); navigate('create'); }} 
+                   className="w-full py-4 border border-dashed border-white/[0.08] rounded-2xl text-xs font-mono font-bold text-zinc-400 hover:border-[#D4FF00]/30 hover:text-[#D4FF00] flex items-center justify-center gap-2 transition-all active:scale-95"
+                 >
+                   <Plus size={16} /> Crear nueva rutina
                  </button>
               </div>
             </div>
@@ -367,30 +427,45 @@ export default function GymTracker({
           <RoutineCreator
             initialData={editingRoutine}
             onSave={async (routineData) => {
-              const isGlobal = editingRoutine?.is_global ?? (isAdmin ? true : false);
-              const routineId = editingRoutine?.id || (crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`);
-              const routineToSave = {
+              const newGlobalRoutineId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+                ? crypto.randomUUID() 
+                : `rot_global_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              
+              const newLocalRoutineId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+                ? crypto.randomUUID() 
+                : `rot_local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+              const globalRoutineToSave = {
                 ...routineData,
-                id: routineId,
-                is_global: isGlobal,
-                parent_routine_id: editingRoutine?.parent_routine_id ?? null,
+                id: newGlobalRoutineId,
+                is_global: true,
+                createdBy: activeProfile.id,
+                parent_routine_id: editingRoutine?.id || null,
+                is_active: false,
+              };
+
+              const localRoutineToSave = {
+                ...routineData,
+                id: newLocalRoutineId,
+                is_global: false,
+                createdBy: activeProfile.id,
+                parent_routine_id: newGlobalRoutineId,
                 is_active: editingRoutine?.is_active ?? false,
               };
 
               try {
-                await saveUserRoutine(activeProfile.id, routineToSave);
-
-                if (isGlobal && !editingRoutine) {
-                  await importRoutineToProfile(activeProfile.id, routineId);
-                }
+                await saveUserRoutine(activeProfile.id, globalRoutineToSave);
+                await saveUserRoutine(activeProfile.id, localRoutineToSave);
 
                 const freshRoutines = await fetchUserRoutines(activeProfile.id);
                 onUpdateRoutines(freshRoutines);
-                showToast(isGlobal ? '✅ Rutina creada y añadida a Mis rutinas' : '✅ Rutina guardada');
+                setGlobalRoutinesVersion(prev => prev + 1);
+                showToast(editingRoutine ? '✅ Nueva versión creada y publicada en el Club' : '✅ Rutina creada y compartida en el Club');
               } catch (e) {
                 console.error('Error guardando rutina:', e);
-                showToast('❌ Guardado en cola offline');
-                addToQueue('saveRoutine', { ...routineToSave, profileId: activeProfile.id });
+                showToast('⚠️ Guardado localmente (en cola de sincronización)');
+                addToQueue('saveRoutine', { ...globalRoutineToSave, profileId: activeProfile.id });
+                addToQueue('saveRoutine', { ...localRoutineToSave, profileId: activeProfile.id });
               }
 
               setEditingRoutine(null);
@@ -473,13 +548,13 @@ function ImportRoutineModal({
   onDeleteGlobal,
   refreshToken
 }) {
-  const [selectedId, setSelectedId] = useState(null);
   const [globalRoutines, setGlobalRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     if (onFetchGlobalRoutines) {
+      setLoading(true);
       onFetchGlobalRoutines()
         .then(data => { 
           if (isMounted) {
@@ -498,41 +573,66 @@ function ImportRoutineModal({
     return () => { isMounted = false; };
   }, [onFetchGlobalRoutines, refreshToken]);
 
-  const availableRoutines = useMemo(() => {
-    return loading ? [] : globalRoutines.filter(
-      gr => !currentRoutines.some(cr => cr.parent_routine_id === gr.id)
-    );
-  }, [loading, globalRoutines, currentRoutines]);
-
   return (
-    <div className="fixed inset-0 z-[100] bg-[#09090B]/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full max-h-[80vh] flex flex-col shadow-2xl animate-scale-in">
-        <h3 className="text-white font-bold text-base mb-2">Importar rutina global</h3>
-        <p className="text-zinc-400 text-xs mb-4">Selecciona una plantilla para añadirla a tus rutinas.</p>
-        <div className="flex-1 overflow-y-auto space-y-2 no-scrollbar">
+    <div className="fixed inset-0 z-[100] bg-[#09090B]/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none">
+      <div className="bg-[#0C0C12] border border-white/[0.08] rounded-[2.5rem] p-6 max-w-sm w-full max-h-[85vh] flex flex-col shadow-2xl animate-scale-in">
+        
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex items-center gap-2">
+            <Globe size={18} className="text-[#D4FF00]" />
+            <h3 className="text-white font-black text-sm uppercase tracking-wider font-sans">Plantillas Globales</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full bg-white/[0.04] text-zinc-400 hover:text-white">
+            <X size={16} />
+          </button>
+        </div>
+
+        <p className="text-zinc-400 text-xs mb-4 font-mono">
+          Selecciona una rutina para duplicarla en tu lista personal.
+        </p>
+
+        <div className="flex-1 overflow-y-auto space-y-2.5 no-scrollbar pr-0.5">
           {loading ? (
-            <div className="text-center py-8 text-zinc-500 font-mono text-xs">Cargando rutinas...</div>
-          ) : availableRoutines.length === 0 ? (
-            <p className="text-zinc-500 text-xs text-center py-6 font-mono">No hay rutinas globales disponibles para importar.</p>
+            <div className="text-center py-10 text-zinc-500 font-mono text-xs">Cargando rutinas del club...</div>
+          ) : globalRoutines.length === 0 ? (
+            <p className="text-zinc-500 text-xs text-center py-8 font-mono">No hay plantillas globales disponibles.</p>
           ) : (
-            availableRoutines.map(r => (
-              <div key={r.id} className="flex items-center justify-between p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                <button onClick={() => setSelectedId(r.id)} className="flex-1 text-left">
-                  <p className="text-white font-semibold text-sm">{r.name}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{r.trainingDays?.length || 0} días</p>
-                </button>
-                <div className="flex items-center gap-2">
+            globalRoutines.map(r => (
+              <div key={r.id} className="p-3.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-2 hover:border-white/[0.12] transition-all">
+                <div className="flex-1 min-w-0 pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-white font-bold text-xs truncate">{r.name}</p>
+                    <span className="text-[8px] font-mono font-black text-[#D4FF00] bg-[#D4FF00]/10 px-1.5 py-0.2 rounded shrink-0">GLOBAL</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{r.trainingDays?.length || 0} días de entreno</p>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
                   {isAdmin && (
                     <>
-                      <button onClick={() => onEditGlobal(r)} className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-white" title="Editar global">
-                        <Edit3 size={14} />
+                      <button 
+                        onClick={() => {
+                          onClose();
+                          onEditGlobal(r);
+                        }} 
+                        className="p-2 rounded-xl bg-white/[0.04] text-zinc-400 hover:text-white active:scale-90" 
+                        title="Crear nueva versión basada en esta"
+                      >
+                        <Edit3 size={13} />
                       </button>
-                      <button onClick={() => onDeleteGlobal(r.id)} className="p-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-400 hover:text-red-400" title="Eliminar global">
-                        <Trash2 size={14} />
+                      <button 
+                        onClick={() => onDeleteGlobal(r.id)} 
+                        className="p-2 rounded-xl bg-white/[0.04] text-zinc-400 hover:text-rose-400 active:scale-90" 
+                        title="Eliminar plantilla del club"
+                      >
+                        <Trash2 size={13} />
                       </button>
                     </>
                   )}
-                  <button onClick={() => onImport(r.id)} disabled={!r.id} className="px-3 py-1.5 bg-[#D4FF00] text-[#09090B] text-xs font-bold rounded-lg hover:bg-[#C4E600] disabled:opacity-30 active:scale-95 transition-all font-mono">
+                  <button 
+                    onClick={() => onImport(r.id)} 
+                    className="px-3 py-2 bg-[#D4FF00] text-[#09090B] text-xs font-mono font-black uppercase tracking-wider rounded-xl hover:bg-[#C4E600] active:scale-95 transition-all shadow-sm"
+                  >
                     Importar
                   </button>
                 </div>
@@ -540,8 +640,11 @@ function ImportRoutineModal({
             ))
           )}
         </div>
+
         <div className="flex justify-end mt-4 pt-4 border-t border-white/[0.05]">
-          <button onClick={onClose} className="px-4 py-2 border border-white/[0.08] rounded-xl text-zinc-400 text-xs font-bold active:scale-95">Cancelar</button>
+          <button onClick={onClose} className="w-full py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-zinc-400 text-xs font-mono font-bold uppercase active:scale-95">
+            Cerrar
+          </button>
         </div>
       </div>
     </div>

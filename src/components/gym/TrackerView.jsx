@@ -1,4 +1,3 @@
-// src/components/gym/TrackerView.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { 
@@ -29,7 +28,7 @@ const playBeep = (freq = 880, duration = 0.45) => {
 // Disparador de vibración táctil
 const triggerHaptic = (pattern = 25) => {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try { navigator.vibrate(pattern); } catch (e) {}
+    try { navigator.vibrate(pattern); } catch {}
   }
 };
 
@@ -90,7 +89,6 @@ const ConfettiCanvas = () => {
   return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-[250]" />;
 };
 
-// Configuración de visualización de RIR
 const RIR_CONFIG = {
   0: { label: 'R0', name: 'Fallo', bg: 'bg-rose-500/20', text: 'text-rose-400', border: 'border-rose-500/50' },
   1: { label: 'R1', name: 'Límite', bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/50' },
@@ -126,8 +124,6 @@ export default function TrackerView({
   });
 
   const [expandedId, setExpandedId] = useState(null);
-
-  // TEMPORIZADOR DE DESCANSO ENTRE SERIES (90s por defecto)
   const [restTimer, setRestTimer] = useState({ active: false, seconds: 90, running: false, totalSeconds: 90 });
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -141,6 +137,42 @@ export default function TrackerView({
   const timerRef = useRef(null);
   const exerciseRefs = useRef({});
   const DRAFT_KEY = `draft_${activeRoutine.id}_${activeDayIndex}`;
+
+  // =========================================================================
+  // CONTROLADOR DEL BOTÓN ATRÁS EN TRACKER VIEW
+  // =========================================================================
+  useEffect(() => {
+    const handleBackEvent = (e) => {
+      e.preventDefault();
+      // 1. Cerrar modales internos si están abiertos
+      if (newPrCelebration) {
+        setNewPrCelebration(null);
+        return;
+      }
+      if (detailExercise) {
+        setDetailExercise(null);
+        return;
+      }
+      if (plateCalcTarget) {
+        setPlateCalcTarget(null);
+        return;
+      }
+      if (warmupTarget) {
+        setWarmupTarget(null);
+        return;
+      }
+      if (showExitConfirm) {
+        setShowExitConfirm(false);
+        return;
+      }
+
+      // 2. Si no hay modal abierto, solicitar confirmación de pausa/salida
+      setShowExitConfirm(true);
+    };
+
+    window.addEventListener('lomecan-hardware-back', handleBackEvent);
+    return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
+  }, [newPrCelebration, detailExercise, plateCalcTarget, warmupTarget, showExitConfirm]);
 
   // Mantener pantalla encendida
   useEffect(() => {
@@ -221,7 +253,7 @@ export default function TrackerView({
     return () => clearTimeout(timer);
   }, [exercises, DRAFT_KEY]);
 
-  // Temporizador de descanso (Cuenta regresiva)
+  // Temporizador de descanso
   useEffect(() => {
     if (restTimer.running && restTimer.seconds > 0) {
       timerRef.current = setInterval(() => {
@@ -242,7 +274,6 @@ export default function TrackerView({
     return () => clearInterval(timerRef.current);
   }, [restTimer.running, soundEnabled]);
 
-  // Completar serie y lanzar el cronómetro inmediatamente
   const toggleSetDone = (exerciseId, setIdx) => {
     const ex = exercises.find(e => e.id === exerciseId);
     if (!ex) return;
@@ -294,7 +325,6 @@ export default function TrackerView({
     }
   };
 
-  // Ajuste de peso
   const handleWeightStep = (exerciseId, setIdx, delta) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -311,7 +341,6 @@ export default function TrackerView({
     triggerHaptic(18);
   };
 
-  // Ajuste de repeticiones
   const handleRepsStep = (exerciseId, setIdx, delta) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -329,7 +358,6 @@ export default function TrackerView({
     triggerHaptic(18);
   };
 
-  // Ciclo de RIR
   const cycleRIR = (exerciseId, setIdx) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -346,7 +374,6 @@ export default function TrackerView({
     triggerHaptic(22);
   };
 
-  // Copiar serie anterior
   const copyFromPreviousSet = (exerciseId, setIdx) => {
     if (setIdx === 0) return;
     setExercises(prev => prev.map(ex => {
@@ -368,7 +395,6 @@ export default function TrackerView({
     triggerHaptic(25);
   };
 
-  // Actualizar inputs directos
   const updateSetInput = (exerciseId, setIdx, field, value) => {
     setExercises(prev => prev.map(ex => {
       if (ex.id !== exerciseId) return ex;
@@ -379,12 +405,11 @@ export default function TrackerView({
     }));
   };
 
-  // Finalizar sesión (guarda el músculo para alimentar EvolutionView)
   const handleFinish = () => {
     const completedExercises = exercises.map(ex => ({
       id: ex.id,
       name: ex.name,
-      muscle: ex.muscle || '', // Preserva el músculo primario
+      muscle: ex.muscle || '',
       secondaryMuscles: ex.secondaryMuscles || ex.secondary_muscles || '',
       libraryExerciseId: ex.libraryExerciseId,
       sets: ex.sets.map((s, idx) => ({
@@ -466,7 +491,7 @@ export default function TrackerView({
             </div>
             <button
               onClick={() => setNewPrCelebration(null)}
-              className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95"
+              className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 font-mono"
             >
               ¡A SEGUIR ENTRENANDO!
             </button>
@@ -594,7 +619,6 @@ export default function TrackerView({
                   : 'bg-[#0A0A0F]/80 border-white/[0.06] hover:border-white/10'
               }`}
             >
-              {/* Encabezado del ejercicio */}
               <div
                 onClick={() => {
                   triggerHaptic(15);
@@ -653,7 +677,6 @@ export default function TrackerView({
                 </div>
               </div>
 
-              {/* Barra de progreso */}
               <div className="px-4 pb-2">
                 <div className="w-full bg-black/60 rounded-full h-1 overflow-hidden border border-white/[0.04]">
                   <div
@@ -665,11 +688,9 @@ export default function TrackerView({
                 </div>
               </div>
 
-              {/* Contenido expandido con series */}
               {isExpanded && (
                 <div className="px-3 pb-4 pt-1.5 border-t border-white/[0.04] space-y-2.5 bg-black/30 animate-fade-in">
                   
-                  {/* Herramientas de Barra y Calentamiento */}
                   <div className="flex items-center justify-between gap-2 pt-1 pb-1">
                     <button
                       onClick={() => setPlateCalcTarget({ name: ex.name, weight: activeWeight || 60 })}
@@ -686,7 +707,6 @@ export default function TrackerView({
                     </button>
                   </div>
 
-                  {/* Tarjetas de Series Ergonómicas */}
                   {ex.sets.map((set, setIdx) => {
                     const rirData = RIR_CONFIG[set.rir ?? 2] || RIR_CONFIG[2];
 
@@ -699,7 +719,6 @@ export default function TrackerView({
                             : 'bg-[#050507]/90 border-white/[0.06]'
                         }`}
                       >
-                        {/* Nivel 1: Serie # + Selector RIR + Botón de Check */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-black ${
@@ -733,11 +752,10 @@ export default function TrackerView({
                               </button>
                             )}
 
-                            {/* BOTÓN LISTO / HECHO */}
                             <button
                               type="button"
                               onClick={() => toggleSetDone(ex.id, setIdx)}
-                              className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-black uppercase tracking-wider transition-all active:scale-90 ${
+                              className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-black uppercase tracking-wider transition-all active:scale-90 font-mono ${
                                 set.done
                                   ? 'bg-[#D4FF00] text-[#050507] shadow-[0_0_12px_rgba(212,255,0,0.6)]'
                                   : 'bg-white/[0.05] border border-white/[0.1] text-zinc-300 hover:text-white'
@@ -749,9 +767,7 @@ export default function TrackerView({
                           </div>
                         </div>
 
-                        {/* Nivel 2: Bloques Anchos de Peso y Repeticiones */}
                         <div className="grid grid-cols-2 gap-2">
-                          {/* Bloque Peso */}
                           <div className="bg-black/60 border border-white/[0.08] rounded-xl p-2 flex items-center justify-between">
                             <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase pl-1">Peso (kg)</span>
                             <div className="flex items-center gap-1">
@@ -784,7 +800,6 @@ export default function TrackerView({
                             </div>
                           </div>
 
-                          {/* Bloque Repeticiones */}
                           <div className="bg-black/60 border border-white/[0.08] rounded-xl p-2 flex items-center justify-between">
                             <span className="text-[9px] font-mono font-bold text-zinc-400 uppercase pl-1">Reps</span>
                             <div className="flex items-center gap-1">
@@ -932,7 +947,7 @@ function PlateCalculatorModal({ initialWeight, exerciseName, onClose }) {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Disc size={18} className="text-[#D4FF00]" />
-            <h3 className="text-sm font-black text-white uppercase tracking-wider">Calculadora de Discos</h3>
+            <h3 className="text-sm font-black text-white uppercase tracking-wider font-sans">Calculadora de Discos</h3>
           </div>
           <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white">
             <X size={18} />
@@ -943,7 +958,7 @@ function PlateCalculatorModal({ initialWeight, exerciseName, onClose }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[10px] font-bold text-zinc-400 uppercase">Peso Total (kg)</label>
+            <label className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Peso Total (kg)</label>
             <input
               type="number"
               step="2.5"
@@ -953,7 +968,7 @@ function PlateCalculatorModal({ initialWeight, exerciseName, onClose }) {
             />
           </div>
           <div>
-            <label className="text-[10px] font-bold text-zinc-400 uppercase">Peso de Barra</label>
+            <label className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Peso de Barra</label>
             <select
               value={barWeight}
               onChange={e => setBarWeight(parseFloat(e.target.value))}
@@ -1014,7 +1029,7 @@ function WarmupModal({ workingWeight, exerciseName, onClose }) {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Flame size={18} className="text-amber-400" />
-            <h3 className="text-sm font-black text-white uppercase tracking-wider">Pirámide de Calentamiento</h3>
+            <h3 className="text-sm font-black text-white uppercase tracking-wider font-sans">Pirámide de Calentamiento</h3>
           </div>
           <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white">
             <X size={18} />

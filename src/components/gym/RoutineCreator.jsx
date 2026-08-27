@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import {
   X, Save, Plus, Trash2, ChevronRight, ChevronLeft,
   Calendar, Dumbbell, Sparkles, ChevronDown, ChevronUp,
-  ArrowRight, AlertCircle, Minus
+  ArrowRight, AlertCircle, Globe
 } from 'lucide-react';
 import { getCurrentMonth, getCurrentYear } from '../../utils/gymHelpers';
 import LibrarySelector from './LibrarySelector';
@@ -32,16 +32,19 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
 
   const [trainingDays, setTrainingDays] = useState(() => {
     if (initialData?.trainingDays && initialData.trainingDays.length > 0) {
-      return initialData.trainingDays.map(d => ({
-        ...d,
-        exercises: (d.exercises || []).map(ex => ({
+      return initialData.trainingDays.map((d, dIdx) => ({
+        id: `day_new_${dIdx + 1}`,
+        name: d.name || `Día ${dIdx + 1}`,
+        exercises: (d.exercises || []).map((ex, exIdx) => ({
           ...ex,
+          id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `ex_${Date.now()}_${exIdx}`,
           sets: (ex.sets || []).map((s, idx) => ({
             ...s,
-            id: s.id || `set_${Date.now()}_${idx}`,
+            id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `set_${Date.now()}_${idx}`,
             setNum: s.setNum || idx + 1,
             weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
-            reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10'
+            reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10',
+            rir: s.rir ?? 2
           }))
         }))
       }));
@@ -58,7 +61,6 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
     setTimeout(() => setNotification(null), 2500);
   };
 
-  // Validar si puede avanzar
   const canGoNext = () => {
     if (step === 1) return name.trim().length > 0;
     if (step === 2) {
@@ -109,14 +111,15 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
     const repsValue = libraryExercise.default_reps || '10-12';
 
     const defaultSets = Array.from({ length: seriesCount }, (_, i) => ({
-      id: crypto.randomUUID ? crypto.randomUUID() : `set_${Date.now()}_${i}`,
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `set_${Date.now()}_${i}`,
       setNum: i + 1,
       weight: '',
       reps: repsValue,
+      rir: 2
     }));
 
     const newExercise = {
-      id: crypto.randomUUID ? crypto.randomUUID() : `ex_${Date.now()}_${Math.random()}`,
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `ex_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: libraryExercise.name,
       muscle: libraryExercise.muscle,
       secondaryMuscles: libraryExercise.secondary_muscles || '',
@@ -161,10 +164,11 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
             if (ex.id !== exerciseId) return ex;
             const lastSet = ex.sets[ex.sets.length - 1];
             const nextSet = {
-              id: crypto.randomUUID ? crypto.randomUUID() : `set_${Date.now()}_${ex.sets.length}`,
+              id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `set_${Date.now()}_${ex.sets.length}`,
               setNum: ex.sets.length + 1,
               weight: lastSet?.weight ?? '',
               reps: lastSet?.reps ?? '10',
+              rir: lastSet?.rir ?? 2
             };
             return { ...ex, sets: [...ex.sets, nextSet] };
           })
@@ -220,10 +224,11 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           exercises: day.exercises.map(ex => {
             if (ex.id !== exerciseId) return ex;
             const newSets = preset.sets.map((targetReps, i) => ({
-              id: crypto.randomUUID ? crypto.randomUUID() : `set_${Date.now()}_${i}`,
+              id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `set_${Date.now()}_${i}`,
               setNum: i + 1,
               weight: ex.sets[i]?.weight ?? '',
               reps: String(targetReps),
+              rir: 2
             }));
             return { ...ex, sets: newSets };
           })
@@ -237,12 +242,11 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
     if (!name.trim()) return;
 
     const formattedData = {
-      id: initialData?.id || (crypto.randomUUID ? crypto.randomUUID() : `rot_${Date.now()}`),
       name: name.trim(),
-      month: initialData?.month || getCurrentMonth(),
-      year: initialData?.year || getCurrentYear(),
+      month: getCurrentMonth(),
+      year: getCurrentYear(),
       trainingDays: trainingDays.map((day, dIdx) => ({
-        id: day.id || `day_${dIdx + 1}`,
+        id: `day_${dIdx + 1}`,
         name: day.name.trim() || `Día ${dIdx + 1}`,
         exercises: day.exercises.map(ex => ({
           id: ex.id,
@@ -257,6 +261,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
             setNum: sIdx + 1,
             weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
             reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10',
+            rir: s.rir ?? 2
           }))
         }))
       }))
@@ -281,8 +286,12 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
       </div>
 
       <div>
-        <h2 className="text-xl font-black text-white tracking-tight font-sans">Nombre del Plan</h2>
-        <p className="text-xs text-zinc-400 mt-1 font-sans">Asigna un título para tu rutina de entrenamiento</p>
+        <h2 className="text-xl font-black text-white tracking-tight font-sans">
+          {initialData ? 'Nueva Versión del Plan' : 'Nombre del Plan'}
+        </h2>
+        <p className="text-xs text-zinc-400 mt-1 font-sans">
+          {initialData ? 'Se guardará como una nueva rutina sin borrar la existente' : 'Asigna un título para tu rutina de entrenamiento'}
+        </p>
       </div>
 
       <div className="w-full space-y-4">
@@ -401,7 +410,7 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
             <p className="text-xs font-medium text-zinc-400">Este día aún no tiene ejercicios</p>
             <button
               onClick={() => setShowLibraryModal(true)}
-              className="px-4 py-2.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider shadow-md active:scale-95"
+              className="px-4 py-2.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider shadow-md active:scale-95 font-mono"
             >
               + Añadir Ejercicio
             </button>
@@ -554,8 +563,12 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
       </div>
 
       <div>
-        <h3 className="text-xl font-black text-white tracking-tight font-sans">¡Plan Listo para Guardar!</h3>
-        <p className="text-xs text-zinc-400 mt-1 font-sans">Revisa el resumen de tu rutina antes de asignarla</p>
+        <h3 className="text-xl font-black text-white tracking-tight font-sans">
+          {initialData ? '¡Nueva Versión Lista!' : '¡Plan Listo para Guardar!'}
+        </h3>
+        <p className="text-xs text-zinc-400 mt-1 font-sans">
+          Se guardará en tus rutinas y se publicará en el catálogo global del Club
+        </p>
       </div>
 
       <div className="w-full luxury-card p-5 text-left space-y-3 font-mono">
@@ -571,17 +584,23 @@ export default function RoutineCreator({ onSave, onCancel, initialData = null })
           <span className="text-zinc-400">Total ejercicios:</span>
           <span className="text-white font-bold">{totalExercisesCount}</span>
         </div>
-        <div className="flex justify-between text-xs">
+        <div className="flex justify-between text-xs border-b border-white/[0.04] pb-2">
           <span className="text-zinc-400">Total series:</span>
           <span className="text-white font-bold">{totalSetsCount}</span>
+        </div>
+        <div className="flex justify-between text-xs items-center pt-1">
+          <span className="text-zinc-400">Disponibilidad:</span>
+          <span className="text-[#D4FF00] font-black flex items-center gap-1">
+            <Globe size={12} /> Global en Club
+          </span>
         </div>
       </div>
 
       <button
         onClick={handleSubmit}
-        className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,255,0,0.35)] active:scale-[0.98] transition-all"
+        className="w-full py-4 volt-button rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,255,0,0.35)] active:scale-[0.98] transition-all font-mono"
       >
-        <Save size={16} /> Guardar y Asignar Rutina
+        <Save size={16} /> Guardar y Publicar Rutina
       </button>
     </div>
   );

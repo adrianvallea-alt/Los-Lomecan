@@ -17,7 +17,7 @@ const cacheOrFetch = async (key, fetcher) => {
   }
 
   try {
-    const data = await fetchWithTimeout(fetcher(), 3000);
+    const data = await fetchWithTimeout(fetcher(), 3500);
     if (data !== null && data !== undefined) {
       localStorage.setItem(key, JSON.stringify(data));
     }
@@ -42,12 +42,22 @@ function formatRoutineData(r) {
     const sortedDays = [...r.routine_days].sort((a, b) => (a.day_index ?? 0) - (b.day_index ?? 0));
     trainingDays = sortedDays.map(day => ({
       id: day.id,
-      dayName: day.name,
-      dayIndex: day.day_index,
+      name: day.name,
       exercises: (day.routine_exercises || []).map(ex => ({
         id: ex.id,
         name: ex.name,
-        sets: ex.routine_sets || []
+        muscle: ex.muscle || '',
+        secondaryMuscles: ex.secondary_muscles || '',
+        description: ex.description || '',
+        video_url: ex.video_url || '',
+        libraryExerciseId: ex.library_exercise_id || null,
+        sets: (ex.routine_sets || []).map((s, sIdx) => ({
+          id: s.id || `set_${sIdx + 1}`,
+          setNum: s.set_number || sIdx + 1,
+          weight: s.weight !== undefined && s.weight !== null ? String(s.weight) : '',
+          reps: s.reps !== undefined && s.reps !== null ? String(s.reps) : '10',
+          rir: s.rir ?? 2
+        }))
       }))
     }));
   }
@@ -152,17 +162,28 @@ export async function fetchUserRoutines(profileId) {
 }
 
 export async function fetchAllGlobalRoutines() {
-  const result = await cacheOrFetch('globalRoutinesCache', async () => {
-    const { data, error } = await supabase
-      .from('routines')
-      .select('*')
-      .eq('is_global', true)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(formatRoutineData);
-  });
-  return result || [];
+  // Siempre consultar datos frescos cuando hay conexión
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      const { data, error } = await supabase
+        .from('routines')
+        .select('*')
+        .eq('is_global', true)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        const formatted = data.map(formatRoutineData);
+        localStorage.setItem('globalRoutinesCache', JSON.stringify(formatted));
+        return formatted;
+      }
+    } catch (e) {
+      console.warn('Error obteniendo rutinas globales frescas, usando caché:', e);
+    }
+  }
+
+  const cached = localStorage.getItem('globalRoutinesCache');
+  return cached ? JSON.parse(cached) : [];
 }
 
 export async function saveUserRoutine(profileId, routine) {
@@ -170,17 +191,18 @@ export async function saveUserRoutine(profileId, routine) {
     throw new TypeError('Device is offline');
   }
 
-  const isGlobal = routine.is_global ?? (!routine.parent_routine_id);
+  const isGlobal = Boolean(routine.is_global);
   const routineData = {
     id: routine.id,
     name: routine.name,
     month: routine.month ?? 0,
     year: routine.year ?? 0,
     training_days: routine.trainingDays || [],
-    created_by: isGlobal ? null : profileId,
+    created_by: isGlobal ? (routine.createdBy || profileId) : profileId,
     is_active: Boolean(routine.is_active),
-    is_global: Boolean(isGlobal),
-    parent_routine_id: isGlobal ? null : (routine.parent_routine_id ?? null)
+    is_global: isGlobal,
+    parent_routine_id: routine.parent_routine_id ?? null,
+    deleted_at: null
   };
 
   const { error } = await supabase
@@ -188,6 +210,10 @@ export async function saveUserRoutine(profileId, routine) {
     .upsert(routineData, { onConflict: 'id' });
 
   if (error) throw error;
+
+  // Invalidar cachés locales para reflejar cambios en tiempo real
+  localStorage.removeItem('globalRoutinesCache');
+  localStorage.removeItem(`userRoutines_${profileId}`);
 }
 
 export async function importRoutineToProfile(profileId, globalRoutineId) {
@@ -202,7 +228,7 @@ export async function importRoutineToProfile(profileId, globalRoutineId) {
     .single();
   if (fetchError) throw fetchError;
 
-  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `rot_${Date.now()}`;
+  const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `rot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const localRoutine = {
     id: newId,
     name: globalRoutine.name,
@@ -212,13 +238,17 @@ export async function importRoutineToProfile(profileId, globalRoutineId) {
     created_by: profileId,
     is_active: false,
     is_global: false,
-    parent_routine_id: globalRoutineId
+    parent_routine_id: globalRoutineId,
+    deleted_at: null
   };
 
   const { error: insertError } = await supabase
     .from('routines')
     .insert(localRoutine);
   if (insertError) throw insertError;
+
+  localStorage.removeItem(`userRoutines_${profileId}`);
+  return localRoutine;
 }
 
 export async function deleteUserRoutine(profileId, routineId, isGlobal = false) {
@@ -231,12 +261,16 @@ export async function deleteUserRoutine(profileId, routineId, isGlobal = false) 
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', routineId);
 
+  // Si no es global, asegurar que solo borre la copia del usuario
   if (!isGlobal) {
     query = query.eq('created_by', profileId).eq('is_global', false);
   }
 
   const { error } = await query;
   if (error) throw error;
+
+  localStorage.removeItem('globalRoutinesCache');
+  localStorage.removeItem(`userRoutines_${profileId}`);
 }
 
 // ==================== EJERCICIOS ====================

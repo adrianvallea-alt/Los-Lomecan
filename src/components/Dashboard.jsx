@@ -1,4 +1,3 @@
-// src/components/Dashboard.jsx
 import React, { useMemo, useState, useEffect, memo, useCallback } from 'react';
 import { 
   Play, Sun, Scale, Share2, Waves, 
@@ -143,6 +142,27 @@ export default function Dashboard({
   const [quickFat, setQuickFat] = useState('');
   const [quickCategory, setQuickCategory] = useState('comida');
 
+  // =========================================================================
+  // CONTROLADOR DEL BOTÓN FÍSICO ATRÁS EN DASHBOARD
+  // =========================================================================
+  useEffect(() => {
+    const handleBackEvent = (e) => {
+      if (showQuickAddModal) {
+        e.preventDefault();
+        setShowQuickAddModal(false);
+        return;
+      }
+      if (showShareModal) {
+        e.preventDefault();
+        setShowShareModal(false);
+        return;
+      }
+    };
+
+    window.addEventListener('lomecan-hardware-back', handleBackEvent);
+    return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
+  }, [showQuickAddModal, showShareModal]);
+
   const todayStr = new Date().toDateString();
   const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
 
@@ -232,7 +252,6 @@ export default function Dashboard({
       return;
     }
 
-    // Corrección de escala matemática exacta de macros
     itemsToCopy.forEach(item => {
       const grams = item.grams || 100;
       const factor = 100 / grams;
@@ -317,7 +336,7 @@ export default function Dashboard({
       <div className="mb-4 shrink-0">
         <button
           onClick={onStartWorkout}
-          className="w-full py-4 volt-button flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] text-xs font-black uppercase tracking-wider"
+          className="w-full py-4 volt-button flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-[0_0_25px_rgba(212,255,0,0.3)] text-xs font-black uppercase tracking-wider font-mono"
         >
           <Play size={16} fill="currentColor" />
           {currentRoutine ? `ENTRENAR: ${currentRoutine.name}` : 'INICIAR RUTINA DE HOY'}
@@ -465,7 +484,7 @@ export default function Dashboard({
         <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
           <div className="luxury-card p-6 max-w-sm w-full space-y-4 animate-scale-in">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-black text-white uppercase tracking-wider">Entrada Rápida</h3>
+              <h3 className="text-sm font-black text-white uppercase tracking-wider font-sans">Entrada Rápida</h3>
               <button onClick={() => setShowQuickAddModal(false)} className="p-1 text-zinc-400 hover:text-white">
                 <X size={18} />
               </button>
@@ -498,11 +517,11 @@ export default function Dashboard({
                   placeholder="Calorías (kcal) *"
                   value={quickCal}
                   onChange={e => setQuickCal(e.target.value)}
-                  className="bg-black/70 border border-white/[0.1] rounded-xl p-2.5 text-xs text-center text-[#D4FF00] font-bold outline-none"
+                  className="bg-black/70 border border-white/[0.1] rounded-xl p-2.5 text-xs text-center text-[#D4FF00] font-bold outline-none font-mono"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2 font-mono">
                 <input
                   type="number"
                   inputMode="decimal"
@@ -533,7 +552,7 @@ export default function Dashboard({
             <button
               onClick={handleSaveQuickEntry}
               disabled={!quickName.trim() || !quickCal}
-              className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 disabled:opacity-30"
+              className="w-full py-3.5 volt-button rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 disabled:opacity-30 font-mono"
             >
               Registrar en mi día
             </button>

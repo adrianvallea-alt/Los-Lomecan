@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import ProfileSelection from './components/ProfileSelection';
 import BottomNav from './components/BottomNav';
@@ -10,7 +10,7 @@ import EvolutionView from './components/EvolutionView';
 import ProfileManager from './components/ProfileManager';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
-import { Users, Lock, Radio } from 'lucide-react';
+import { Users, Lock, Radio, LogOut } from 'lucide-react';
 import {
   fetchProfiles,
   fetchUserRoutines,
@@ -52,41 +52,106 @@ export default function App() {
   const [showProfileManager, setShowProfileManager] = useState(false);
   const [openLibrary, setOpenLibrary] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [exitToast, setExitToast] = useState(false);
+
+  const lastBackPressRef = useRef(0);
+  const exitToastTimerRef = useRef(null);
 
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
   const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
-  // 1. Control del Botón Físico de Retroceso (Android)
-  useEffect(() => {
-    let backListener;
-    const registerBackHandler = async () => {
-      try {
-        backListener = await CapApp.addListener('backButton', () => {
-          if (showOnboarding) {
-            setShowOnboarding(false);
-          } else if (showProfileManager) {
-            setShowProfileManager(false);
-          } else if (openLibrary) {
-            setOpenLibrary(false);
-          } else if (currentTab !== 'hoy') {
-            setCurrentTab('hoy');
-          } else {
-            CapApp.exitApp();
-          }
-        });
-      } catch (err) {
-        // En entorno Web no Capacitor, se ignora silenciosamente
-      }
-    };
+  // =========================================================================
+  // GESTOR CENTRALIZADO DEL BOTÓN ATRÁS (JERARQUÍA Y DOBLE PULSACIÓN)
+  // =========================================================================
+  const handleHardwareBack = useCallback(() => {
+    // 1. Preguntar a componentes hijos activos si tienen modales abiertos
+    const customBackEvent = new CustomEvent('lomecan-hardware-back', { cancelable: true });
+    window.dispatchEvent(customBackEvent);
 
-    registerBackHandler();
-    return () => {
-      if (backListener) backListener.remove();
-    };
+    // Si algún componente hijo manejó el evento (cerró su modal), no hacemos nada más
+    if (customBackEvent.defaultPrevented) {
+      return;
+    }
+
+    // 2. Modales de nivel superior en App.jsx
+    if (showOnboarding) {
+      setShowOnboarding(false);
+      return;
+    }
+    if (showProfileManager) {
+      setShowProfileManager(false);
+      return;
+    }
+    if (openLibrary) {
+      setOpenLibrary(false);
+      return;
+    }
+
+    // 3. Si estamos en otra pestaña (Alimentos, Gimnasio, Evolución), regresar a "Hoy"
+    if (currentTab !== 'hoy') {
+      setCurrentTab('hoy');
+      return;
+    }
+
+    // 4. Estamos en la pantalla principal (Dashboard "Hoy" o Selector de Perfil):
+    // Control de doble pulsación para salir de la app
+    const now = Date.now();
+    if (now - lastBackPressRef.current < 2000) {
+      // Segunda pulsación en menos de 2 segundos -> Salir
+      try {
+        CapApp.exitApp();
+      } catch (e) {
+        // En navegador web
+      }
+    } else {
+      // Primera pulsación -> Mostrar toast informativo
+      lastBackPressRef.current = now;
+      setExitToast(true);
+      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
+      exitToastTimerRef.current = setTimeout(() => {
+        setExitToast(false);
+      }, 2000);
+
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate(25); } catch {}
+      }
+    }
   }, [showOnboarding, showProfileManager, openLibrary, currentTab]);
 
-  // 2. Cargar perfiles
+  useEffect(() => {
+    let backListener;
+    const registerCapacitorBack = async () => {
+      try {
+        backListener = await CapApp.addListener('backButton', () => {
+          handleHardwareBack();
+        });
+      } catch (err) {}
+    };
+
+    registerCapacitorBack();
+
+    // Soporte para PWA y Navegadores (gesto de retroceso de pantalla)
+    const pushDummyHistory = () => {
+      window.history.pushState({ lomecanNav: true }, '');
+    };
+    pushDummyHistory();
+
+    const handlePopState = () => {
+      pushDummyHistory();
+      handleHardwareBack();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      if (backListener) backListener.remove();
+      window.removeEventListener('popstate', handlePopState);
+      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
+    };
+  }, [handleHardwareBack]);
+
+  // Cargar perfiles
   useEffect(() => {
     let isMounted = true;
     const loadProfiles = async () => {
@@ -125,7 +190,7 @@ export default function App() {
     localStorage.removeItem('lastActiveProfile');
   }, []);
 
-  // 3. Cargar rutinas (Dependencia exacta por ID)
+  // Cargar rutinas
   useEffect(() => {
     if (!activeProfile?.id) {
       setRoutines([]);
@@ -147,7 +212,7 @@ export default function App() {
     return () => { isMounted = false; };
   }, [activeProfile?.id]);
 
-  // 4. Cargar ingesta diaria (Dependencia exacta por ID)
+  // Cargar ingesta diaria
   useEffect(() => {
     if (!activeProfile?.id) return;
     let isMounted = true;
@@ -165,7 +230,7 @@ export default function App() {
     return () => { isMounted = false; };
   }, [activeProfile?.id]);
 
-  // 5. Calibración inicial si faltan datos
+  // Calibración inicial si faltan datos
   useEffect(() => {
     if (activeProfile?.id && !activeProfile.id.startsWith('temp_')) {
       const needsOnboarding = !activeProfile.weight || !activeProfile.height || !activeProfile.age;
@@ -447,9 +512,9 @@ export default function App() {
 
             <button
               onClick={handleLogout}
-              className="text-[10px] font-mono tracking-widest font-extrabold uppercase border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 rounded-full text-zinc-400 hover:text-white hover:border-[#D4FF00]/40 transition-all active:scale-95"
+              className="text-[10px] font-mono tracking-widest font-extrabold uppercase border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 rounded-full text-zinc-400 hover:text-white hover:border-[#D4FF00]/40 transition-all active:scale-95 flex items-center gap-1"
             >
-              Cambiar
+              <LogOut size={11} /> Cambiar
             </button>
           </div>
         </header>
@@ -499,6 +564,14 @@ export default function App() {
         />
 
         <InstallPrompt />
+
+        {/* Notificación flotante de salida */}
+        {exitToast && (
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] bg-[#0C0C12]/95 border border-[#D4FF00]/50 text-white text-xs font-mono font-bold px-5 py-2.5 rounded-full shadow-[0_0_30px_rgba(212,255,0,0.3)] backdrop-blur-xl animate-fade-in flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#D4FF00] animate-pulse" />
+            Pulsa de nuevo para salir de la app
+          </div>
+        )}
       </div>
     </div>
   );

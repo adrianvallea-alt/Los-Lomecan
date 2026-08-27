@@ -1,4 +1,3 @@
-// src/components/EvolutionView.jsx
 import React, { useState, useEffect, useMemo, useRef, memo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { 
@@ -220,6 +219,27 @@ export default function EvolutionView({ activeProfile }) {
     Brazo: 0,
     Abdomen: 0
   });
+
+  // =========================================================================
+  // CONTROLADOR DEL BOTÓN ATRÁS EN EVOLUCIÓN
+  // =========================================================================
+  useEffect(() => {
+    const handleBackEvent = (e) => {
+      if (showInteractiveCalc) {
+        e.preventDefault();
+        setShowInteractiveCalc(false);
+        return;
+      }
+      if (activeTab === 'photos') {
+        e.preventDefault();
+        setActiveTab('metrics');
+        return;
+      }
+    };
+
+    window.addEventListener('lomecan-hardware-back', handleBackEvent);
+    return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
+  }, [showInteractiveCalc, activeTab]);
 
   const weightData = useMemo(() => {
     return (weightLogs || [])
@@ -509,7 +529,7 @@ export default function EvolutionView({ activeProfile }) {
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Zap size={18} className="text-[#D4FF00]" />
-                <h3 className="text-sm font-black text-white uppercase tracking-wider">Calculadora de 1RM</h3>
+                <h3 className="text-sm font-black text-white uppercase tracking-wider font-sans">Calculadora de 1RM</h3>
               </div>
               <button onClick={() => setShowInteractiveCalc(false)} className="p-1.5 rounded-full bg-white/[0.05] text-zinc-400 hover:text-white">
                 <X size={18} />
