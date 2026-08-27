@@ -59,7 +59,7 @@ export default function useOfflineQueue(profileId) {
       case 'saveRoutine': {
         const routine = item.payload.routine || item.payload;
         const targetProfileId = item.payload.profileId || profileId;
-        const isGlobal = routine.is_global ?? (!routine.parent_routine_id);
+        const isGlobal = Boolean(routine.is_global);
 
         const routineData = {
           id: routine.id,
@@ -67,13 +67,34 @@ export default function useOfflineQueue(profileId) {
           month: routine.month ?? 0,
           year: routine.year ?? 0,
           training_days: routine.trainingDays || routine.training_days || [],
-          created_by: isGlobal ? null : targetProfileId,
+          created_by: isGlobal ? (routine.createdBy || targetProfileId) : targetProfileId,
           is_active: Boolean(routine.is_active),
-          is_global: Boolean(isGlobal),
-          parent_routine_id: isGlobal ? null : (routine.parent_routine_id ?? null),
+          is_global: isGlobal,
+          parent_routine_id: routine.parent_routine_id ?? null,
+          deleted_at: null,
         };
 
         const { error } = await supabase.from('routines').upsert(routineData, { onConflict: 'id' });
+        if (error) throw error;
+        break;
+      }
+
+      // ✅ CASO AÑADIDO: Eliminación de rutinas offline
+      case 'deleteRoutine': {
+        const routineId = item.payload.id || item.payload;
+        const isGlobal = Boolean(item.payload.isGlobal);
+        const targetProfileId = item.payload.profileId || profileId;
+
+        let query = supabase
+          .from('routines')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', routineId);
+
+        if (!isGlobal) {
+          query = query.eq('created_by', targetProfileId).eq('is_global', false);
+        }
+
+        const { error } = await query;
         if (error) throw error;
         break;
       }
@@ -176,7 +197,6 @@ export default function useOfflineQueue(profileId) {
       }
     }
 
-    // Actualización funcional para NUNCA perder datos ingresados mientras se sincronizaba
     setQueue(prevQueue =>
       prevQueue
         .filter(item => !successfulIds.has(item.id))
@@ -184,7 +204,7 @@ export default function useOfflineQueue(profileId) {
           const newRetries = retryIncrements.get(item.id);
           return newRetries !== undefined ? { ...item, retries: newRetries } : item;
         })
-        .filter(item => item.retries <= 5) // Descartar si supera 5 intentos fallidos
+        .filter(item => item.retries <= 5)
     );
 
     setIsSyncing(false);

@@ -23,18 +23,18 @@ export function getAllUserData(profileId) {
     } catch {}
   }
 
+  // Lectura atómica segura
   const prefix = `workoutHistory_${profileId}_`;
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(prefix)) {
+  Object.keys(localStorage)
+    .filter(key => key.startsWith(prefix))
+    .forEach(key => {
       try {
         const sessions = JSON.parse(localStorage.getItem(key));
         if (Array.isArray(sessions)) {
           data.workoutHistory.push(...sessions);
         }
       } catch {}
-    }
-  }
+    });
 
   const intakeStr = localStorage.getItem(`dailyIntake_${profileId}`);
   if (intakeStr) {

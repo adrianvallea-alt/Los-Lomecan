@@ -1,3 +1,4 @@
+// src/components/Dashboard.jsx
 import React, { useMemo, useState, useEffect, memo, useCallback } from 'react';
 import { 
   Play, Sun, Scale, Share2, Waves, 
@@ -163,8 +164,13 @@ export default function Dashboard({
     return () => window.removeEventListener('lomecan-hardware-back', handleBackEvent);
   }, [showQuickAddModal, showShareModal]);
 
-  const todayStr = new Date().toDateString();
-  const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
+  // Fechas exactas y atómicas
+  const todayStr = useMemo(() => new Date().toDateString(), []);
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toDateString();
+  }, []);
 
   const todayItems = useMemo(() => {
     return dailyIntake.filter((entry) => {
@@ -586,9 +592,10 @@ const ClubLeaderboard = memo(function ClubLeaderboard({ currentProfileId }) {
         let sessionsCount = 0;
         const prefix = `workoutHistory_${p.id}_`;
 
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key?.startsWith(prefix)) {
+        // Lectura atómica segura
+        Object.keys(localStorage)
+          .filter(k => k.startsWith(prefix))
+          .forEach(key => {
             try {
               const sessions = JSON.parse(localStorage.getItem(key));
               if (Array.isArray(sessions)) {
@@ -602,8 +609,7 @@ const ClubLeaderboard = memo(function ClubLeaderboard({ currentProfileId }) {
                 });
               }
             } catch {}
-          }
-        }
+          });
 
         return {
           id: p.id,

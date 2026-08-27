@@ -10,7 +10,8 @@ import EvolutionView from './components/EvolutionView';
 import ProfileManager from './components/ProfileManager';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
-import { Users, Lock, Radio, LogOut, AlertCircle } from 'lucide-react';
+import IntroScreen from './components/IntroScreen';
+import { Users, Lock, Radio, LogOut } from 'lucide-react';
 import {
   fetchProfiles,
   fetchUserRoutines,
@@ -35,6 +36,10 @@ const DEFAULT_PROFILES = [
 const uniqueById = (arr) => Array.from(new Map(arr.map(p => [p.id, p])).values());
 
 export default function App() {
+  const [showIntro, setShowIntro] = useState(() => {
+    return !sessionStorage.getItem('lomecan_intro_shown');
+  });
+
   const [activeProfile, setActiveProfile] = useState(() => {
     try {
       const saved = localStorage.getItem('lastActiveProfile');
@@ -54,8 +59,8 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [exitToast, setExitToast] = useState(false);
 
-  // Referencias para que el listener del botón atrás nunca se desconecte ni tenga datos viejos
   const stateRef = useRef({
+    showIntro: false,
     currentTab: 'hoy',
     showOnboarding: false,
     showProfileManager: false,
@@ -64,6 +69,7 @@ export default function App() {
   });
 
   stateRef.current = {
+    showIntro,
     currentTab,
     showOnboarding,
     showProfileManager,
@@ -84,11 +90,17 @@ export default function App() {
   const executeBackAction = useCallback(() => {
     const currentState = stateRef.current;
 
+    // 0. Si está la pantalla de inicio, saltarla
+    if (currentState.showIntro) {
+      sessionStorage.setItem('lomecan_intro_shown', 'true');
+      setShowIntro(false);
+      return;
+    }
+
     // 1. Emitir evento a componentes hijos (Modales de Gym, Catálogo, etc.)
     const customBackEvent = new CustomEvent('lomecan-hardware-back', { cancelable: true });
     window.dispatchEvent(customBackEvent);
 
-    // Si algún componente hijo cerró su modal o vista interna, nos detenemos aquí
     if (customBackEvent.defaultPrevented) {
       return;
     }
@@ -113,7 +125,7 @@ export default function App() {
       return;
     }
 
-    // 4. Estamos en el Dashboard principal: Doble pulsación para salir
+    // 4. En el Dashboard: Doble pulsación para salir
     const now = Date.now();
     if (now - lastBackPressRef.current < 2000) {
       if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
@@ -136,7 +148,6 @@ export default function App() {
     }
   }, []);
 
-  // Registrar el listener una sola vez al montar (sin dependencias cambiantes)
   useEffect(() => {
     let capListener;
 
@@ -150,7 +161,6 @@ export default function App() {
 
     setupListeners();
 
-    // Soporte PWA / Gestos en navegador
     const pushHistoryTrap = () => {
       window.history.pushState({ lomecanTrap: Date.now() }, '');
     };
@@ -392,6 +402,17 @@ export default function App() {
   const currentRoutine = useMemo(() => routines.find(r => r.is_active === true), [routines]);
   const pendingWorkout = Boolean(currentRoutine);
 
+  if (showIntro) {
+    return (
+      <IntroScreen
+        onFinish={() => {
+          sessionStorage.setItem('lomecan_intro_shown', 'true');
+          setShowIntro(false);
+        }}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-[100dvh] bg-[#050507] flex items-center justify-center select-none">
@@ -480,7 +501,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Header Superior con soporte para Notch */}
+        {/* Header Superior */}
         <header 
           className="px-5 pb-2.5 flex justify-between items-center z-20 bg-[#050507]/80 backdrop-blur-2xl border-b border-white/[0.05] shrink-0"
           style={{ paddingTop: queue.length > 0 ? '0.75rem' : 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}
@@ -584,7 +605,7 @@ export default function App() {
 
         <InstallPrompt />
 
-        {/* AVISO FLOTANTE DE SALIDA: DOBLE PULSACIÓN */}
+        {/* Aviso flotante de salida */}
         {exitToast && (
           <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999] bg-[#0A0A0F]/95 border border-[#D4FF00] text-white text-xs font-mono font-black px-5 py-3 rounded-full shadow-[0_0_35px_rgba(212,255,0,0.4)] backdrop-blur-2xl animate-fade-in flex items-center gap-2.5 whitespace-nowrap">
             <span className="w-2.5 h-2.5 rounded-full bg-[#D4FF00] animate-ping" />

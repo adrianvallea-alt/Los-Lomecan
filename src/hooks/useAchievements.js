@@ -37,15 +37,15 @@ export default function useAchievements(activeProfileId) {
     const allSessions = [];
     const prefix = `workoutHistory_${activeProfileId}_`;
 
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(prefix)) {
+    // Lectura atómica segura de LocalStorage
+    Object.keys(localStorage)
+      .filter(key => key.startsWith(prefix))
+      .forEach(key => {
         try {
           const parsed = JSON.parse(localStorage.getItem(key));
           if (Array.isArray(parsed)) allSessions.push(...parsed);
         } catch {}
-      }
-    }
+      });
 
     const totalSessions = allSessions.length;
     let totalVolume = 0;
@@ -66,7 +66,6 @@ export default function useAchievements(activeProfileId) {
       }
     });
 
-    // Fechas únicas ordenadas como timestamps de medianoche local
     const sortedDateTimestamps = Array.from(uniqueDaysSet)
       .map(str => new Date(str + 'T00:00:00').getTime())
       .sort((a, b) => a - b);
@@ -79,7 +78,7 @@ export default function useAchievements(activeProfileId) {
 
     let checkDay = todayMidnight;
     if (!uniqueDaysSet.has(toISODateOnly(checkDay))) {
-      checkDay -= oneDayMs; // Si hoy no ha entrenado aún, verificar desde ayer
+      checkDay -= oneDayMs;
     }
 
     while (uniqueDaysSet.has(toISODateOnly(checkDay))) {
@@ -87,7 +86,7 @@ export default function useAchievements(activeProfileId) {
       checkDay -= oneDayMs;
     }
 
-    // Mejor Racha Histórica (Manejo de saltos de 1 día exacto con redondeo)
+    // Mejor Racha Histórica
     let longestStreak = 0;
     let tempStreak = 0;
 
