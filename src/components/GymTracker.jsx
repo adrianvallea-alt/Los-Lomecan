@@ -68,7 +68,7 @@ export default function GymTracker({
   // =========================================================================
   useEffect(() => {
     const handleBackEvent = (e) => {
-      // 1. Si el modal de importar está abierto, cerrarlo y detener el retroceso
+      // 1. Si el modal de importar está abierto, cerrarlo y detener retroceso
       if (showImportModalRef.current) {
         e.preventDefault();
         setShowImportModal(false);
@@ -77,7 +77,12 @@ export default function GymTracker({
 
       const currentV = viewRef.current;
 
-      // 2. Si estamos en el editor de rutinas, regresar al listado
+      // 2. Si estamos dentro de TrackerView, TrackerView se encarga con su propio diálogo de confirmación
+      if (currentV === 'tracker') {
+        return;
+      }
+
+      // 3. Si estamos en el creador, regresar al listado
       if (currentV === 'create') {
         e.preventDefault();
         setEditingRoutine(null);
@@ -85,20 +90,14 @@ export default function GymTracker({
         return;
       }
 
-      // 3. Si estamos en pantallas secundarias, regresar a la pantalla 'home' de rutinas
-      if (currentV === 'daySelector' || currentV === 'history' || currentV === 'library' || currentV === 'exerciseLibrary' || currentV === 'finished') {
+      // 4. Si estamos en cualquier otra sub-vista del gym, regresar a la pantalla 'home' de rutinas
+      if (currentV === 'daySelector' || currentV === 'history' || currentV === 'library' || currentV === 'exerciseLibrary' || currentV === 'finished' || currentV === 'libraryAuth') {
         e.preventDefault();
         setView('home');
         return;
       }
 
-      if (currentV === 'libraryAuth') {
-        e.preventDefault();
-        setView('home');
-        return;
-      }
-
-      // 4. Si estamos en 'home' (pantalla principal de rutinas):
+      // 5. Si ya estamos en 'home' (pantalla principal de rutinas):
       // NO llamamos a e.preventDefault(). Dejamos que App.jsx capture el evento
       // y regrese fluidamente a la pestaña "Hoy" (Dashboard).
     };
@@ -194,15 +193,14 @@ export default function GymTracker({
     const allSessions = [];
     const prefix = `workoutHistory_${activeProfile.id}_`;
 
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(prefix)) {
+    Object.keys(localStorage)
+      .filter(key => key.startsWith(prefix))
+      .forEach(key => {
         try {
           const sessions = JSON.parse(localStorage.getItem(key));
           if (Array.isArray(sessions)) allSessions.push(...sessions);
         } catch {}
-      }
-    }
+      });
 
     let globalRecs = {};
     allSessions.forEach(s => { globalRecs = updatePersonalRecords(globalRecs, s); });

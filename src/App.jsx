@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import ProfileSelection from './components/ProfileSelection';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/Dashboard';
@@ -11,7 +12,7 @@ import ProfileManager from './components/ProfileManager';
 import OnboardingWizard from './components/OnboardingWizard';
 import InstallPrompt from './components/InstallPrompt';
 import IntroScreen from './components/IntroScreen';
-import { Users, Lock, Radio, LogOut } from 'lucide-react';
+import { Users, Lock, Radio, LogOut, AlertTriangle, X } from 'lucide-react';
 import {
   fetchProfiles,
   fetchUserRoutines,
@@ -57,14 +58,16 @@ export default function App() {
   const [showProfileManager, setShowProfileManager] = useState(false);
   const [openLibrary, setOpenLibrary] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [exitToast, setExitToast] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
 
+  // Referencias de estado en tiempo real
   const stateRef = useRef({
     showIntro: false,
     currentTab: 'hoy',
     showOnboarding: false,
     showProfileManager: false,
     openLibrary: false,
+    showExitModal: false,
     activeProfile: null,
   });
 
@@ -74,30 +77,43 @@ export default function App() {
     showOnboarding,
     showProfileManager,
     openLibrary,
+    showExitModal,
     activeProfile,
   };
 
-  const lastBackPressRef = useRef(0);
-  const exitToastTimerRef = useRef(null);
+  const lastBackExecutionRef = useRef(0);
 
   useReminders(activeProfile?.id);
   const { queue, isSyncing, addToQueue } = useOfflineQueue(activeProfile?.id);
   const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
   // =========================================================================
-  // GESTOR PRINCIPAL DEL BOTÓN ATRÁS (UNIFICADO Y PERSISTENTE)
+  // GESTOR DEL BOTÓN ATRÁS CON FILTRO ANTI-REBOTE (ANTI-DUPLICADOS)
   // =========================================================================
   const executeBackAction = useCallback(() => {
+    const now = Date.now();
+    // Bloquear rebote si se ejecuta dos veces en menos de 350ms
+    if (now - lastBackExecutionRef.current < 350) {
+      return;
+    }
+    lastBackExecutionRef.current = now;
+
     const currentState = stateRef.current;
 
-    // 0. Si está la pantalla de inicio, saltarla
+    // 0. Si el modal de confirmación de salida está abierto, cerrarlo
+    if (currentState.showExitModal) {
+      setShowExitModal(false);
+      return;
+    }
+
+    // 1. Si está la pantalla de inicio, saltarla
     if (currentState.showIntro) {
       sessionStorage.setItem('lomecan_intro_shown', 'true');
       setShowIntro(false);
       return;
     }
 
-    // 1. Emitir evento a componentes hijos (Modales de Gym, Catálogo, etc.)
+    // 2. Emitir evento a componentes hijos (Modales de Gym, Catálogo, etc.)
     const customBackEvent = new CustomEvent('lomecan-hardware-back', { cancelable: true });
     window.dispatchEvent(customBackEvent);
 
@@ -105,7 +121,7 @@ export default function App() {
       return;
     }
 
-    // 2. Modales de nivel superior de App.jsx
+    // 3. Modales de nivel superior de App.jsx
     if (currentState.showOnboarding) {
       setShowOnboarding(false);
       return;
@@ -119,64 +135,50 @@ export default function App() {
       return;
     }
 
-    // 3. Si no estamos en la pestaña principal "Hoy" (Dashboard), regresar a "Hoy"
+    // 4. Si estamos en otra pestaña (Gimnasio, Alimentos o Evolución), REGRESAR A "HOY" (Dashboard)
     if (currentState.currentTab !== 'hoy') {
       setCurrentTab('hoy');
       return;
     }
 
-    // 4. En el Dashboard: Doble pulsación para salir
-    const now = Date.now();
-    if (now - lastBackPressRef.current < 2000) {
-      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
-      setExitToast(false);
-      try {
-        CapApp.exitApp();
-      } catch (e) {}
-    } else {
-      lastBackPressRef.current = now;
-      setExitToast(true);
-
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        try { navigator.vibrate(30); } catch {}
-      }
-
-      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
-      exitToastTimerRef.current = setTimeout(() => {
-        setExitToast(false);
-      }, 2000);
+    // 5. Si ya estamos en el Dashboard principal: Mostrar diálogo de confirmación de salida
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try { navigator.vibrate(30); } catch {}
     }
+    setShowExitModal(true);
   }, []);
 
   useEffect(() => {
     let capListener;
 
-    const setupListeners = async () => {
-      try {
-        capListener = await CapApp.addListener('backButton', () => {
-          executeBackAction();
-        });
-      } catch (e) {}
-    };
-
-    setupListeners();
-
-    const pushHistoryTrap = () => {
-      window.history.pushState({ lomecanTrap: Date.now() }, '');
-    };
-    pushHistoryTrap();
-
-    const handlePopState = () => {
+    // Si es aplicación nativa en Android (Capacitor)
+    if (Capacitor.isNativePlatform()) {
+      const setupNativeBack = async () => {
+        try {
+          capListener = await CapApp.addListener('backButton', () => {
+            executeBackAction();
+          });
+        } catch (e) {}
+      };
+      setupNativeBack();
+    } else {
+      // Si es PWA en navegador móvil
+      const pushHistoryTrap = () => {
+        window.history.pushState({ lomecanTrap: Date.now() }, '');
+      };
       pushHistoryTrap();
-      executeBackAction();
-    };
 
-    window.addEventListener('popstate', handlePopState);
+      const handlePopState = () => {
+        pushHistoryTrap();
+        executeBackAction();
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
 
     return () => {
       if (capListener) capListener.remove();
-      window.removeEventListener('popstate', handlePopState);
-      if (exitToastTimerRef.current) clearTimeout(exitToastTimerRef.current);
     };
   }, [executeBackAction]);
 
@@ -605,11 +607,43 @@ export default function App() {
 
         <InstallPrompt />
 
-        {/* Aviso flotante de salida */}
-        {exitToast && (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[999] bg-[#0A0A0F]/95 border border-[#D4FF00] text-white text-xs font-mono font-black px-5 py-3 rounded-full shadow-[0_0_35px_rgba(212,255,0,0.4)] backdrop-blur-2xl animate-fade-in flex items-center gap-2.5 whitespace-nowrap">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#D4FF00] animate-ping" />
-            <span>Presiona de nuevo para salir de Lomecan</span>
+        {/* DIÁLOGO / MODAL DE CONFIRMACIÓN DE SALIDA (IMPOSIBLE DE CERRAR ACCIDENTALMENTE) */}
+        {showExitModal && (
+          <div className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in select-none">
+            <div className="luxury-card p-6 max-w-xs w-full space-y-4 text-center border-white/[0.1] shadow-2xl animate-scale-in">
+              <div className="w-14 h-14 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto text-[#D4FF00]">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white font-sans uppercase tracking-tight">
+                  ¿Salir de Lomecan?
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1 font-sans leading-relaxed">
+                  Tu progreso y registros de hoy están guardados y sincronizados.
+                </p>
+              </div>
+              <div className="flex gap-2.5 pt-1 font-mono">
+                <button
+                  type="button"
+                  onClick={() => setShowExitModal(false)}
+                  className="flex-1 py-3 bg-white/[0.04] border border-white/[0.08] text-white text-xs font-bold rounded-xl active:scale-95 hover:bg-white/[0.08]"
+                >
+                  Continuar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExitModal(false);
+                    try {
+                      CapApp.exitApp();
+                    } catch (e) {}
+                  }}
+                  className="flex-1 py-3 bg-[#D4FF00] text-[#09090B] text-xs font-black uppercase tracking-wider rounded-xl active:scale-95 shadow-md hover:bg-[#cbf700]"
+                >
+                  Salir
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

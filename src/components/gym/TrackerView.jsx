@@ -163,7 +163,7 @@ export default function TrackerView({
       e.preventDefault();
       const current = stateRef.current;
 
-      // 1. Cerrar modales internos si están abiertos
+      // 1. Cerrar submodales internos si están abiertos
       if (current.newPrCelebration) {
         setNewPrCelebration(null);
         return;
@@ -185,7 +185,7 @@ export default function TrackerView({
         return;
       }
 
-      // 2. Si no hay modal abierto, solicitar confirmación de pausa/salida
+      // 2. Si no hay modal abierto, abrir diálogo de pausa/salida
       setShowExitConfirm(true);
     };
 
@@ -349,7 +349,7 @@ export default function TrackerView({
       if (ex.id !== exerciseId) return ex;
       return {
         ...ex,
-        sets: ex.sets.map((s, idx) => {
+        sets: e.sets.map((s, idx) => {
           if (idx !== setIdx) return s;
           const current = parseFloat(s.weight) || 0;
           const next = Math.max(0, parseFloat((current + delta).toFixed(1)));
@@ -894,9 +894,9 @@ export default function TrackerView({
         />
       )}
 
-      {/* MODAL CONFIRMACIÓN DE SALIDA */}
+      {/* MODAL CONFIRMACIÓN DE SALIDA DEL ENTRENAMIENTO */}
       {showExitConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in">
+        <div className="fixed inset-0 z-[250] bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in">
           <div className="luxury-card p-6 max-w-sm w-full space-y-4">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
