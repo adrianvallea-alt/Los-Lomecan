@@ -1,12 +1,12 @@
 // public/service-worker.js
-const CACHE_NAME = 'lomecan-v13';
+const CACHE_NAME = 'lomecan-v14';
 
 const getBaseUrl = () => {
   return self.location.pathname.replace(/\/[^/]*$/, '/');
 };
 
 // ============================================================
-// INSTALACIÓN: Pre-cachear assets esenciales e instalar de inmediato
+// INSTALACIÓN
 // ============================================================
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -26,12 +26,11 @@ self.addEventListener('install', (event) => {
       });
     })
   );
-  // Forzar activación inmediata sin esperar a que se cierren pestañas
   self.skipWaiting();
 });
 
 // ============================================================
-// ACTIVACIÓN: Limpiar cachés antiguas y tomar control de clientes
+// ACTIVACIÓN: Limpiar todas las cachés anteriores
 // ============================================================
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -39,7 +38,7 @@ self.addEventListener('activate', (event) => {
       Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('🧹 Eliminando caché antigua:', key);
+            console.log('🧹 Purgando caché obsoleta:', key);
             return caches.delete(key);
           }
         })
@@ -49,13 +48,12 @@ self.addEventListener('activate', (event) => {
 });
 
 // ============================================================
-// FETCH: Estrategia Network-First para Navegación y Stale-While-Revalidate
+// FETCH: Network-First garantizado para capturar actualizaciones
 // ============================================================
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // APIs Externas, Supabase, Videos y Extensiones: Directo a la red
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('openfoodfacts.org') ||
@@ -68,7 +66,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Navegación (HTML principal): Network-First forzado para capturar releases de GitHub
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-cache' })
@@ -79,15 +76,11 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          // Si no hay red, servir index.html en caché
-          return caches.match(getBaseUrl() + 'index.html');
-        })
+        .catch(() => caches.match(getBaseUrl() + 'index.html'))
     );
     return;
   }
 
-  // 2. Archivos estáticos y chunks: Cache con fallback a red y actualización en segundo plano
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)
