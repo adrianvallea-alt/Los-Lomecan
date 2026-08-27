@@ -68,7 +68,7 @@ export default function GymTracker({
   // =========================================================================
   useEffect(() => {
     const handleBackEvent = (e) => {
-      // 1. Si el modal de importar está abierto, cerrarlo y detener retroceso
+      // 1. Si el modal de importar está abierto, cerrarlo
       if (showImportModalRef.current) {
         e.preventDefault();
         setShowImportModal(false);
@@ -77,12 +77,12 @@ export default function GymTracker({
 
       const currentV = viewRef.current;
 
-      // 2. Si estamos dentro de TrackerView, TrackerView se encarga con su propio diálogo de confirmación
+      // 2. Si estamos dentro de TrackerView, TrackerView se encarga con su propio diálogo
       if (currentV === 'tracker') {
         return;
       }
 
-      // 3. Si estamos en el creador, regresar al listado
+      // 3. Si estamos en el creador, regresar a Mis Rutinas
       if (currentV === 'create') {
         e.preventDefault();
         setEditingRoutine(null);
@@ -90,7 +90,7 @@ export default function GymTracker({
         return;
       }
 
-      // 4. Si estamos en cualquier otra sub-vista del gym, regresar a la pantalla 'home' de rutinas
+      // 4. Si estamos en sub-vistas del gym, regresar a la pantalla 'home' de rutinas
       if (currentV === 'daySelector' || currentV === 'history' || currentV === 'library' || currentV === 'exerciseLibrary' || currentV === 'finished' || currentV === 'libraryAuth') {
         e.preventDefault();
         setView('home');
@@ -99,7 +99,7 @@ export default function GymTracker({
 
       // 5. Si ya estamos en 'home' (pantalla principal de rutinas):
       // NO llamamos a e.preventDefault(). Dejamos que App.jsx capture el evento
-      // y regrese fluidamente a la pestaña "Hoy" (Dashboard).
+      // y regrese de inmediato a la pestaña "Hoy" (Dashboard).
     };
 
     window.addEventListener('lomecan-hardware-back', handleBackEvent);

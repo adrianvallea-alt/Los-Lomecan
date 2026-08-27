@@ -27,7 +27,7 @@ import useReminders from './hooks/useReminders';
 import useOfflineQueue from './hooks/useOfflineQueue';
 import useWeightLogs from './hooks/useWeightLogs';
 
-const APP_VERSION = 'v1.2';
+const APP_VERSION = 'v1.3';
 
 const DEFAULT_PROFILES = [
   { id: 'adrian', name: 'Adrián', role: 'Coach', color: 'lime', goals: { cal: 2800, pro: 180, carb: 300, fat: 75 }, pin: null, avatar: null },
@@ -62,6 +62,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
 
+  // Estado sincronizado en tiempo real para evitar cierres accidentales
   const stateRef = useRef({
     showIntro: false,
     currentTab: 'hoy',
@@ -89,24 +90,25 @@ export default function App() {
   const { logs: weightLogs } = useWeightLogs(activeProfile?.id);
 
   // =========================================================================
-  // GESTOR CENTRALIZADO DEL BOTÓN ATRÁS (CON FILTRO ANTI-REBOTE 350MS)
+  // GESTOR CENTRALIZADO DEL BOTÓN ATRÁS (ESCALONADO Y 100% BLINDADO)
   // =========================================================================
   const executeBackAction = useCallback(() => {
     const now = Date.now();
-    if (now - lastBackExecutionRef.current < 350) {
+    // Filtro anti-rebote: ignorar si se dispara dos veces en menos de 280ms
+    if (now - lastBackExecutionRef.current < 280) {
       return;
     }
     lastBackExecutionRef.current = now;
 
     const currentState = stateRef.current;
 
-    // 1. Si el modal de salida está abierto, cerrarlo
+    // 1. Si el modal de confirmación de salida está abierto, cerrarlo y quedarse en la app
     if (currentState.showExitModal) {
       setShowExitModal(false);
       return;
     }
 
-    // 2. Si está la pantalla de inicio, saltarla
+    // 2. Si está la pantalla de inicio animada, saltarla
     if (currentState.showIntro) {
       sessionStorage.setItem('lomecan_intro_shown', 'true');
       setShowIntro(false);
@@ -117,11 +119,12 @@ export default function App() {
     const customBackEvent = new CustomEvent('lomecan-hardware-back', { cancelable: true });
     window.dispatchEvent(customBackEvent);
 
+    // Si algún componente hijo (ej. GymTracker subvista o modal) manejó el retroceso, nos detenemos
     if (customBackEvent.defaultPrevented) {
       return;
     }
 
-    // 4. Modales de nivel superior de App.jsx
+    // 4. Modales de nivel superior en App.jsx
     if (currentState.showOnboarding) {
       setShowOnboarding(false);
       return;
@@ -141,16 +144,20 @@ export default function App() {
       return;
     }
 
-    // 6. Si ya estamos en el Dashboard principal: Mostrar diálogo de confirmación
+    // 6. Si ya estamos en el Dashboard principal: ABRIR MODAL DE CONFIRMACIÓN DE SALIDA
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try { navigator.vibrate(30); } catch {}
     }
     setShowExitModal(true);
   }, []);
 
+  // =========================================================================
+  // TRAMPA DE HISTORIAL PERMANENTE (PARA QUE EL MÓVIL NUNCA CIERRE LA PWA)
+  // =========================================================================
   useEffect(() => {
     let capListener;
 
+    // Capacitor Nativo (Android APK)
     if (Capacitor.isNativePlatform()) {
       const setupNativeBack = async () => {
         try {
@@ -161,13 +168,13 @@ export default function App() {
       };
       setupNativeBack();
     } else {
-      const pushHistoryTrap = () => {
-        window.history.pushState({ lomecanTrap: Date.now() }, '');
-      };
-      pushHistoryTrap();
+      // PWA en Chrome / Safari móvil
+      window.history.replaceState({ lomecanRoot: true }, '');
+      window.history.pushState({ lomecanApp: true }, '');
 
-      const handlePopState = () => {
-        pushHistoryTrap();
+      const handlePopState = (e) => {
+        // Re-sembrar inmediatamente una entrada para que el navegador nunca agote el historial
+        window.history.pushState({ lomecanApp: true }, '');
         executeBackAction();
       };
 
@@ -608,10 +615,16 @@ export default function App() {
 
         <InstallPrompt />
 
-        {/* MODAL DE CONFIRMACIÓN DE SALIDA VISIBLE Y ELEGANTE */}
+        {/* MODAL DE CONFIRMACIÓN DE SALIDA (IMPOSIBLE DE EVITAR ACCIDENTALMENTE) */}
         {showExitModal && (
-          <div className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in select-none">
-            <div className="luxury-card p-6 max-w-xs w-full space-y-4 text-center border-white/[0.1] shadow-2xl animate-scale-in">
+          <div 
+            className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in select-none"
+            onClick={() => setShowExitModal(false)}
+          >
+            <div 
+              className="luxury-card p-6 max-w-xs w-full space-y-4 text-center border-white/[0.1] shadow-2xl animate-scale-in"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="w-14 h-14 rounded-2xl bg-[#D4FF00]/10 border border-[#D4FF00]/30 flex items-center justify-center mx-auto text-[#D4FF00]">
                 <AlertTriangle size={24} />
               </div>
@@ -635,9 +648,12 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setShowExitModal(false);
-                    try {
-                      CapApp.exitApp();
-                    } catch (e) {}
+                    if (Capacitor.isNativePlatform()) {
+                      try { CapApp.exitApp(); } catch (e) {}
+                    } else {
+                      // En PWA navegador, vaciar historial para cerrar sesión de pestaña
+                      window.history.go(-2);
+                    }
                   }}
                   className="flex-1 py-3 bg-[#D4FF00] text-[#09090B] text-xs font-black uppercase tracking-wider rounded-xl active:scale-95 shadow-md hover:bg-[#cbf700]"
                 >

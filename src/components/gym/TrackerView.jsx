@@ -185,7 +185,7 @@ export default function TrackerView({
         return;
       }
 
-      // 2. Si no hay modal abierto, abrir diálogo de pausa/salida
+      // 2. Si no hay modal abierto, abrir diálogo de confirmación de pausa
       setShowExitConfirm(true);
     };
 
@@ -349,7 +349,7 @@ export default function TrackerView({
       if (ex.id !== exerciseId) return ex;
       return {
         ...ex,
-        sets: e.sets.map((s, idx) => {
+        sets: ex.sets.map((s, idx) => {
           if (idx !== setIdx) return s;
           const current = parseFloat(s.weight) || 0;
           const next = Math.max(0, parseFloat((current + delta).toFixed(1)));
@@ -896,8 +896,14 @@ export default function TrackerView({
 
       {/* MODAL CONFIRMACIÓN DE SALIDA DEL ENTRENAMIENTO */}
       {showExitConfirm && (
-        <div className="fixed inset-0 z-[250] bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in">
-          <div className="luxury-card p-6 max-w-sm w-full space-y-4">
+        <div 
+          className="fixed inset-0 z-[999] bg-black/85 backdrop-blur-md flex items-center justify-center p-5 animate-fade-in"
+          onClick={() => setShowExitConfirm(false)}
+        >
+          <div 
+            className="luxury-card p-6 max-w-sm w-full space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
                 <AlertTriangle size={18} />
